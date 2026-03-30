@@ -8,14 +8,18 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
     try {
         let query, params;
         if (req.user.role === 'super_admin') {
-            query = `SELECT s.*, COUNT(u.id) FILTER (WHERE u.is_active) as user_count
-                     FROM stores s LEFT JOIN users u ON u.store_id = s.id
-                     WHERE s.is_active = TRUE GROUP BY s.id ORDER BY s.id`;
+            query = `SELECT s.*, b.name as branch_name, COUNT(u.id) FILTER (WHERE u.is_active) as user_count
+                     FROM stores s
+                     LEFT JOIN branches b ON b.id = s.branch_id
+                     LEFT JOIN users u ON u.store_id = s.id
+                     WHERE s.is_active = TRUE GROUP BY s.id, b.name ORDER BY s.id`;
             params = [];
         } else {
-            query = `SELECT s.*, COUNT(u.id) FILTER (WHERE u.is_active) as user_count
-                     FROM stores s LEFT JOIN users u ON u.store_id = s.id
-                     WHERE s.id = $1 GROUP BY s.id`;
+            query = `SELECT s.*, b.name as branch_name, COUNT(u.id) FILTER (WHERE u.is_active) as user_count
+                     FROM stores s
+                     LEFT JOIN branches b ON b.id = s.branch_id
+                     LEFT JOIN users u ON u.store_id = s.id
+                     WHERE s.id = $1 GROUP BY s.id, b.name`;
             params = [req.user.store_id];
         }
         const { rows } = await pool.query(query, params);
@@ -26,11 +30,11 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/stores — super_admin only
 router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, address, phone } = req.body;
+        const { name, address, phone, branch_id } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Tên cửa hàng là bắt buộc' });
         const { rows: [store] } = await pool.query(
-            `INSERT INTO stores (name, address, phone) VALUES ($1,$2,$3) RETURNING *`,
-            [name, address || null, phone || null]
+            `INSERT INTO stores (name, address, phone, branch_id) VALUES ($1,$2,$3,$4) RETURNING *`,
+            [name, address || null, phone || null, branch_id || null]
         );
         res.status(201).json({ success: true, data: store });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -39,10 +43,10 @@ router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
 // PUT /api/stores/:id — super_admin only
 router.put('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, address, phone, is_active } = req.body;
+        const { name, address, phone, is_active, branch_id } = req.body;
         const { rows: [store] } = await pool.query(
-            `UPDATE stores SET name=$1, address=$2, phone=$3, is_active=$4 WHERE id=$5 RETURNING *`,
-            [name, address || null, phone || null, is_active !== false, req.params.id]
+            `UPDATE stores SET name=$1, address=$2, phone=$3, is_active=$4, branch_id=$5 WHERE id=$6 RETURNING *`,
+            [name, address || null, phone || null, is_active !== false, branch_id || null, req.params.id]
         );
         res.json({ success: true, data: store });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }

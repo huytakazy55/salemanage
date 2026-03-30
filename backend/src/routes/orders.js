@@ -11,7 +11,6 @@ function generateOrderCode() {
     return `HD-${d}-${rand}`;
 }
 
-// Helper: store filter
 function storeClause(user, paramOffset = 0) {
     if (user.role === 'super_admin') return { clause: '', params: [], nextIdx: paramOffset + 1 };
     return { clause: `AND store_id = $${paramOffset + 1}`, params: [user.store_id], nextIdx: paramOffset + 2 };
@@ -48,7 +47,7 @@ router.get('/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// POST /api/orders
+// POST /api/orders — uses store_stock instead of products.stock
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -62,11 +61,19 @@ router.post('/', async (req, res) => {
         const resolvedItems = [];
 
         for (const item of items) {
+            // Get product info
             const { rows: [product] } = await client.query(
                 'SELECT * FROM products WHERE id = $1 AND is_active = TRUE', [item.product_id]
             );
             if (!product) throw new Error(`Sản phẩm ID ${item.product_id} không tồn tại`);
-            if (product.stock < item.quantity) throw new Error(`Sản phẩm "${product.name}" không đủ tồn kho (còn ${product.stock})`);
+
+            // Get stock from store_stock
+            const { rows: [ss] } = await client.query(
+                'SELECT quantity FROM store_stock WHERE product_id = $1 AND store_id = $2',
+                [item.product_id, storeId]
+            );
+            const currentStock = ss?.quantity || 0;
+            if (currentStock < item.quantity) throw new Error(`Sản phẩm "${product.name}" không đủ tồn kho (còn ${currentStock})`);
 
             const sellPrice = item.sell_price && +item.sell_price > 0 ? +item.sell_price : +product.sell_price;
             if (!sellPrice || sellPrice <= 0) throw new Error(`Vui lòng nhập giá bán cho "${product.name}"`);
@@ -92,10 +99,15 @@ router.post('/', async (req, res) => {
                 INSERT INTO order_items (order_id, product_id, product_name, quantity, cost_price, sell_price, subtotal, profit)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
             `, [order.id, item.product_id, item.product.name, item.quantity, item.cost_price, item.sell_price, item.subtotal, item.subtotal - item.costTotal]);
-            await client.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
+
+            // Decrement store_stock instead of products.stock
             await client.query(
-                `INSERT INTO inventory_logs (product_id, type, quantity, note) VALUES ($1,'export',$2,$3)`,
-                [item.product_id, item.quantity, `Bán hàng đơn ${orderCode}`]
+                'UPDATE store_stock SET quantity = quantity - $1 WHERE product_id = $2 AND store_id = $3',
+                [item.quantity, item.product_id, storeId]
+            );
+            await client.query(
+                `INSERT INTO inventory_logs (product_id, store_id, type, quantity, note) VALUES ($1,$2,'export',$3,$4)`,
+                [item.product_id, storeId, item.quantity, `Bán hàng đơn ${orderCode}`]
             );
         }
 

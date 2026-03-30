@@ -8,32 +8,44 @@ const { upload } = require('../middleware/upload');
 
 router.use(requireAuth);
 
-// Helper: store filter for queries
-function getStoreFilter(user, paramOffset = 0) {
-    if (user.role === 'super_admin') return { clause: '', params: [], nextIdx: paramOffset + 1 };
-    return {
-        clause: `AND p.store_id = $${paramOffset + 1}`,
-        params: [user.store_id],
-        nextIdx: paramOffset + 2,
-    };
+// Helper: get branch_id for current user's store (or null for super_admin when no filter)
+async function getUserBranchId(user) {
+    if (user.role === 'super_admin') return null; // super_admin sees all
+    if (!user.store_id) return null;
+    const { rows: [s] } = await pool.query('SELECT branch_id FROM stores WHERE id = $1', [user.store_id]);
+    return s?.branch_id || null;
 }
 
-// GET /api/products
+// GET /api/products — returns products with per-store stock quantity
 router.get('/', async (req, res) => {
     try {
         const { search, category_id, low_stock } = req.query;
-        const sf = getStoreFilter(req.user, 0);
+        const branchId = await getUserBranchId(req.user);
+        const storeId = req.user.role === 'super_admin' ? null : req.user.store_id;
+
         let query = `
-            SELECT p.*, c.name as category_name
-            FROM products p LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.is_active = TRUE ${sf.clause}
+            SELECT p.*,
+                   c.name as category_name,
+                   COALESCE(ss.quantity, 0) as stock
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN store_stock ss ON ss.product_id = p.id AND ss.store_id = $1
+            WHERE p.is_active = TRUE
         `;
-        const params = [...sf.params];
-        let idx = sf.nextIdx;
-        if (search) { params.push(`%${search}%`); query += ` AND (p.name ILIKE $${idx} OR p.sku ILIKE $${idx})`; idx++; }
-        if (category_id) { params.push(category_id); query += ` AND p.category_id = $${idx}`; idx++; }
-        if (low_stock === 'true') query += ` AND p.stock <= p.min_stock`;
+        const params = [storeId];
+        let idx = 2;
+
+        if (branchId) { params.push(branchId); query += ` AND p.branch_id = $${idx++}`; }
+
+        if (search) {
+            params.push(`%${search}%`);
+            query += ` AND (p.name ILIKE $${idx} OR p.sku ILIKE $${idx})`;
+            idx++;
+        }
+        if (category_id) { params.push(category_id); query += ` AND p.category_id = $${idx++}`; }
+        if (low_stock === 'true') query += ` AND COALESCE(ss.quantity, 0) <= p.min_stock`;
         query += ` ORDER BY p.name`;
+
         const { rows } = await pool.query(query, params);
         res.json({ success: true, data: rows });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -42,39 +54,71 @@ router.get('/', async (req, res) => {
 // GET /api/products/:id
 router.get('/:id', async (req, res) => {
     try {
-        const sf = getStoreFilter(req.user, 1);
+        const storeId = req.user.role === 'super_admin' ? null : req.user.store_id;
         const { rows } = await pool.query(`
-            SELECT p.*, c.name as category_name
-            FROM products p LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.id = $1 ${sf.clause}
-        `, [req.params.id, ...sf.params]);
+            SELECT p.*, c.name as category_name, COALESCE(ss.quantity, 0) as stock
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN store_stock ss ON ss.product_id = p.id AND ss.store_id = $2
+            WHERE p.id = $1 AND p.is_active = TRUE
+        `, [req.params.id, storeId]);
         if (!rows[0]) return res.status(404).json({ success: false, error: 'Không tìm thấy sản phẩm' });
         res.json({ success: true, data: rows[0] });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// POST /api/products
+// POST /api/products — admin only, creates product at branch level + store_stock for all branch stores
 router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
     const client = await pool.connect();
     try {
         const { name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Tên sản phẩm là bắt buộc' });
-        const storeId = req.user.role === 'super_admin' ? (req.body.store_id || null) : req.user.store_id;
+
+        // Determine branch_id
+        let branchId;
+        if (req.user.role === 'super_admin') {
+            branchId = req.body.branch_id || null;
+        } else {
+            const { rows: [s] } = await pool.query('SELECT branch_id FROM stores WHERE id = $1', [req.user.store_id]);
+            branchId = s?.branch_id || null;
+        }
+        if (!branchId) return res.status(400).json({ success: false, error: 'Cửa hàng chưa được gán chi nhánh. Vui lòng gán chi nhánh trước.' });
+
         const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
+        await client.query('BEGIN');
         const { rows: [product] } = await client.query(`
-            INSERT INTO products (store_id, name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description, image_url)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
-        `, [storeId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, stock || 0, min_stock || 5, unit || 'cái', description || null, image_url]);
+            INSERT INTO products (branch_id, name, sku, category_id, cost_price, sell_price, min_stock, unit, description, image_url)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+        `, [branchId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url]);
 
-        if ((stock || 0) > 0) {
+        // Create store_stock for every store in this branch
+        const { rows: branchStores } = await client.query('SELECT id FROM stores WHERE branch_id = $1 AND is_active = TRUE', [branchId]);
+        const initialQty = parseInt(stock || 0);
+
+        for (const store of branchStores) {
+            const qty = store.id === req.user.store_id ? initialQty : 0;
             await client.query(
-                `INSERT INTO inventory_logs (product_id, type, quantity, cost_price, note) VALUES ($1,'import',$2,$3,'Nhập kho khi tạo sản phẩm')`,
-                [product.id, stock, cost_price]
+                'INSERT INTO store_stock (product_id, store_id, quantity) VALUES ($1,$2,$3) ON CONFLICT (product_id, store_id) DO NOTHING',
+                [product.id, store.id, qty]
             );
         }
-        res.status(201).json({ success: true, data: product });
+
+        // Log initial stock for creating store
+        if (initialQty > 0 && req.user.store_id) {
+            await client.query(
+                `INSERT INTO inventory_logs (product_id, store_id, type, quantity, cost_price, note) VALUES ($1,$2,'import',$3,$4,'Nhập kho khi tạo sản phẩm')`,
+                [product.id, req.user.store_id, initialQty, cost_price]
+            );
+        }
+
+        await client.query('COMMIT');
+
+        // Return with stock for current store
+        const storeQty = initialQty;
+        res.status(201).json({ success: true, data: { ...product, stock: storeQty } });
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ success: false, error: err.message });
     } finally { client.release(); }
 });

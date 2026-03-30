@@ -29,9 +29,11 @@ app.use('/api/auth', require('./routes/auth'));
 
 // Protected routes (auth handled inside each route file)
 app.use('/api/stores', require('./routes/stores'));
+app.use('/api/branches', require('./routes/branches'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/transfers', require('./routes/transfers'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/users', require('./routes/users'));

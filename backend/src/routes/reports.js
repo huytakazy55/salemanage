@@ -26,8 +26,12 @@ router.get('/dashboard', async (req, res) => {
             pool.query(`SELECT COALESCE(SUM(final_amount),0) as revenue, COALESCE(SUM(profit),0) as profit, COUNT(*)::int as orders FROM orders WHERE created_at::date = $1 ${storeFilter}`, [t]),
             pool.query(`SELECT COALESCE(SUM(final_amount),0) as revenue, COALESCE(SUM(profit),0) as profit, COUNT(*)::int as orders FROM orders WHERE created_at::date >= $1 ${storeFilter}`, [ms]),
             pool.query(`SELECT COUNT(*)::int as total FROM products WHERE is_active = TRUE ${prodFilter}`),
-            pool.query(`SELECT COUNT(*)::int as total FROM products WHERE is_active = TRUE AND stock <= min_stock ${prodFilter}`),
-            pool.query(`SELECT COUNT(*)::int as total FROM products WHERE is_active = TRUE AND stock = 0 ${prodFilter}`),
+            pool.query(`SELECT COUNT(*)::int as total FROM products p
+                        JOIN store_stock ss ON ss.product_id = p.id
+                        WHERE p.is_active = TRUE AND ss.quantity <= p.min_stock ${prodFilter.replace('store_id','ss.store_id')}`),
+            pool.query(`SELECT COUNT(*)::int as total FROM products p
+                        JOIN store_stock ss ON ss.product_id = p.id
+                        WHERE p.is_active = TRUE AND ss.quantity = 0 ${prodFilter.replace('store_id','ss.store_id')}`),
             pool.query(`SELECT created_at::date as date, COALESCE(SUM(final_amount),0) as revenue, COALESCE(SUM(profit),0) as profit, COUNT(*)::int as orders
                         FROM orders WHERE created_at::date >= CURRENT_DATE - INTERVAL '6 days' ${storeFilter}
                         GROUP BY created_at::date ORDER BY date ASC`),

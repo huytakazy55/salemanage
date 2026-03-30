@@ -85,4 +85,17 @@ export const storesApi = {
     delete: (id) => api.delete(`/stores/${id}`),
 };
 
+export const branchesApi = {
+    getAll: () => api.get('/branches'),
+    create: (data) => api.post('/branches', data),
+    update: (id, data) => api.put(`/branches/${id}`, data),
+    delete: (id) => api.delete(`/branches/${id}`),
+};
+
+export const transfersApi = {
+    transfer: (data) => api.post('/transfers', data),
+    getLogs: (params) => api.get('/transfers', { params }),
+    getStores: () => api.get('/transfers/stores'),
+};
+
 export default api;

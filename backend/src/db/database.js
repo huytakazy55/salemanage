@@ -15,12 +15,20 @@ async function initSchema() {
   const client = await pool.connect();
   try {
     await client.query(`
-      -- ── Stores ──────────────────────────────────────────────────
+      -- ── Branches ──────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS branches (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- ── Stores ────────────────────────────────────────────────
       CREATE TABLE IF NOT EXISTS stores (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         address TEXT,
         phone TEXT,
+        branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL,
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -40,23 +48,22 @@ async function initSchema() {
       -- ── Categories ──────────────────────────────────────────────
       CREATE TABLE IF NOT EXISTS categories (
         id SERIAL PRIMARY KEY,
-        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         description TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(store_id, name)
+        UNIQUE(branch_id, name)
       );
 
-      -- ── Products ────────────────────────────────────────────────
+      -- ── Products (branch-level, shared across stores) ──────────
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
-        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         sku TEXT,
         category_id INTEGER REFERENCES categories(id),
         cost_price NUMERIC(15,0) NOT NULL DEFAULT 0,
         sell_price NUMERIC(15,0) NOT NULL DEFAULT 0,
-        stock INTEGER NOT NULL DEFAULT 0,
         min_stock INTEGER NOT NULL DEFAULT 5,
         unit TEXT DEFAULT 'cái',
         image_url TEXT,
@@ -64,17 +71,29 @@ async function initSchema() {
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(store_id, sku)
+        UNIQUE(branch_id, sku)
+      );
+
+      -- ── Store stock (per-store quantity) ──────────────────────
+      CREATE TABLE IF NOT EXISTS store_stock (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(product_id, store_id)
       );
 
       -- ── Inventory logs ──────────────────────────────────────────
       CREATE TABLE IF NOT EXISTS inventory_logs (
         id SERIAL PRIMARY KEY,
         product_id INTEGER NOT NULL REFERENCES products(id),
-        type TEXT NOT NULL CHECK(type IN ('import','export','adjust')),
+        store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL,
+        type TEXT NOT NULL CHECK(type IN ('import','export','adjust','transfer_in','transfer_out')),
         quantity INTEGER NOT NULL,
         cost_price NUMERIC(15,0),
         note TEXT,
+        related_store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL,
+        performed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
@@ -120,15 +139,53 @@ async function initSchema() {
         BEFORE UPDATE ON products
         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
-      -- ── Migrations: add store_id to existing tables if missing ──
+      -- ── Migrations ──────────────────────────────────────────────
       ALTER TABLE users ADD COLUMN IF NOT EXISTS store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL;
-      ALTER TABLE categories ADD COLUMN IF NOT EXISTS store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE;
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE;
+      ALTER TABLE stores ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE;
 
-      -- Fix role check constraint to allow super_admin
+      -- Fix role check constraint
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
       ALTER TABLE users ADD CONSTRAINT users_role_check CHECK(role IN ('super_admin','admin','employee'));
+
+      -- Migrate products: add branch_id column (keep store_id for migration reference)
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS min_stock INTEGER NOT NULL DEFAULT 5;
+
+      -- Populate products.branch_id from stores.branch_id where store_id matches
+      UPDATE products p SET branch_id = s.branch_id
+        FROM stores s WHERE p.store_id = s.id AND p.branch_id IS NULL AND s.branch_id IS NOT NULL;
+
+      -- Create store_stock table
+      CREATE TABLE IF NOT EXISTS store_stock (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(product_id, store_id)
+      );
+
+      -- Migrate existing stock into store_stock (only where store_id is set)
+      INSERT INTO store_stock (product_id, store_id, quantity)
+        SELECT id, store_id, COALESCE(stock, 0)
+        FROM products
+        WHERE store_id IS NOT NULL
+        ON CONFLICT (product_id, store_id) DO NOTHING;
+
+      -- Add store_id to inventory_logs if missing
+      ALTER TABLE inventory_logs ADD COLUMN IF NOT EXISTS store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL;
+      ALTER TABLE inventory_logs ADD COLUMN IF NOT EXISTS related_store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL;
+      ALTER TABLE inventory_logs ADD COLUMN IF NOT EXISTS performed_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      -- Extend inventory_logs type check
+      ALTER TABLE inventory_logs DROP CONSTRAINT IF EXISTS inventory_logs_type_check;
+      ALTER TABLE inventory_logs ADD CONSTRAINT inventory_logs_type_check
+        CHECK(type IN ('import','export','adjust','transfer_in','transfer_out'));
+
+      -- Categories: add branch_id (keep store_id for backward compat)
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE;
+      UPDATE categories c SET branch_id = s.branch_id
+        FROM stores s WHERE c.store_id = s.id AND c.branch_id IS NULL AND s.branch_id IS NOT NULL;
     `);
     console.log('✅ Schema initialized');
   } finally {
@@ -136,7 +193,6 @@ async function initSchema() {
   }
 }
 
-// Helper: run a query with optional params
 pool.q = (text, params) => pool.query(text, params);
 
 module.exports = { pool, initSchema };
