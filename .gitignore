@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.npm
+
+# Environment variables — KHÔNG đẩy lên GitHub
+.env
+.env.local
+.env.production
+backend/.env
+
+# Build output
+frontend/dist/
+frontend/.vite/
+
+# Docker
+docker-compose.override.yml
+
+# Uploads (ảnh sản phẩm — lưu local, không push)
+backend/uploads/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+
+# Logs
+*.log
+npm-debug.log*
