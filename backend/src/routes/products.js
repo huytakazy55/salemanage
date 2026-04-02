@@ -71,7 +71,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
     const client = await pool.connect();
     try {
-        const { name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description } = req.body;
+        const { name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description, commission_pct } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Tên sản phẩm là bắt buộc' });
 
         // Determine branch_id
@@ -88,9 +88,9 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 
         await client.query('BEGIN');
         const { rows: [product] } = await client.query(`
-            INSERT INTO products (branch_id, name, sku, category_id, cost_price, sell_price, min_stock, unit, description, image_url)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
-        `, [branchId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url]);
+            INSERT INTO products (branch_id, name, sku, category_id, cost_price, sell_price, min_stock, unit, description, image_url, commission_pct)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+        `, [branchId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0]);
 
         // Create store_stock for every store in this branch
         const { rows: branchStores } = await client.query('SELECT id FROM stores WHERE branch_id = $1 AND is_active = TRUE', [branchId]);
@@ -126,7 +126,7 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 // PUT /api/products/:id
 router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
     try {
-        const { name, sku, category_id, cost_price, sell_price, min_stock, unit, description } = req.body;
+        const { name, sku, category_id, cost_price, sell_price, min_stock, unit, description, commission_pct } = req.body;
         let image_url;
         if (req.file) {
             image_url = `/uploads/${req.file.filename}`;
@@ -138,11 +138,11 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
         }
         let query, params;
         if (image_url) {
-            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, image_url=$9 WHERE id=$10 RETURNING *`;
-            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, req.params.id];
+            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, image_url=$9, commission_pct=$10 WHERE id=$11 RETURNING *`;
+            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0, req.params.id];
         } else {
-            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8 WHERE id=$9 RETURNING *`;
-            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, req.params.id];
+            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, commission_pct=$9 WHERE id=$10 RETURNING *`;
+            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, commission_pct || 0, req.params.id];
         }
         const { rows: [product] } = await pool.query(query, params);
         res.json({ success: true, data: product });

@@ -19,15 +19,26 @@ function storeClause(user, paramOffset = 0) {
 // GET /api/orders
 router.get('/', async (req, res) => {
     try {
-        const { from, to, limit = 100 } = req.query;
+        const { from, to, limit = 100, user_id } = req.query;
         const sf = storeClause(req.user);
-        let query = `SELECT * FROM orders WHERE 1=1 ${sf.clause}`;
+        let query = `SELECT o.*, u.full_name as seller_name
+                     FROM orders o
+                     LEFT JOIN users u ON u.id = o.created_by_user_id
+                     WHERE 1=1 ${sf.clause}`;
         const params = [...sf.params];
         let idx = sf.nextIdx;
-        if (from) { params.push(from); query += ` AND created_at::date >= $${idx++}`; }
-        if (to) { params.push(to); query += ` AND created_at::date <= $${idx++}`; }
+        if (from) { params.push(from); query += ` AND o.created_at::date >= $${idx++}`; }
+        if (to) { params.push(to); query += ` AND o.created_at::date <= $${idx++}`; }
+        // allow filtering by employee (admin feature)
+        if (user_id && ['admin', 'super_admin'].includes(req.user.role)) {
+            params.push(parseInt(user_id)); query += ` AND o.created_by_user_id = $${idx++}`;
+        }
+        // employee sees only their own orders
+        if (req.user.role === 'employee') {
+            params.push(req.user.id); query += ` AND o.created_by_user_id = $${idx++}`;
+        }
         params.push(parseInt(limit));
-        query += ` ORDER BY created_at DESC LIMIT $${idx}`;
+        query += ` ORDER BY o.created_at DESC LIMIT $${idx}`;
         const { rows } = await pool.query(query, params);
         res.json({ success: true, data: rows });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -38,14 +49,16 @@ router.get('/:id', async (req, res) => {
     try {
         const sf = storeClause(req.user, 1);
         const { rows: [order] } = await pool.query(
-            `SELECT * FROM orders WHERE id = $1 ${sf.clause}`,
+            `SELECT o.*, u.full_name as seller_name
+             FROM orders o LEFT JOIN users u ON u.id = o.created_by_user_id
+             WHERE o.id = $1 ${sf.clause}`,
             [req.params.id, ...sf.params]
         );
         if (!order) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn hàng' });
         const { rows: items } = await pool.query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
         res.json({ success: true, data: { ...order, items } });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
-});
+});;
 
 // POST /api/orders — uses store_stock instead of products.stock
 router.post('/', async (req, res) => {
@@ -90,9 +103,9 @@ router.post('/', async (req, res) => {
         const orderCode = generateOrderCode();
 
         const { rows: [order] } = await client.query(`
-            INSERT INTO orders (store_id, order_code, customer_name, customer_phone, total_amount, total_cost, discount, final_amount, profit, payment_method, note)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
-        `, [storeId, orderCode, customer_name || null, customer_phone || null, totalAmount, totalCost, discount, finalAmount, profit, payment_method, note || null]);
+            INSERT INTO orders (store_id, created_by_user_id, order_code, customer_name, customer_phone, total_amount, total_cost, discount, final_amount, profit, payment_method, note)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+        `, [storeId, req.user.id, orderCode, customer_name || null, customer_phone || null, totalAmount, totalCost, discount, finalAmount, profit, payment_method, note || null]);
 
         for (const item of resolvedItems) {
             await client.query(`

@@ -69,6 +69,13 @@ export const reportsApi = {
     getDashboard: () => api.get('/reports/dashboard'),
     getRevenue: (params) => api.get('/reports/revenue', { params }),
     getProfit: (params) => api.get('/reports/profit', { params }),
+    getEmployeePerformance: (params) => api.get('/reports/employee-performance', { params }),
+    getSalary: (params) => api.get('/reports/salary', { params }),
+};
+
+export const salaryConfigApi = {
+    get: () => api.get('/salary-config'),
+    upsert: (data) => api.post('/salary-config', data),
 };
 
 export const usersApi = {

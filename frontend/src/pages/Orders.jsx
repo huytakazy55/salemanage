@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ordersApi } from '../services/api';
-import { ClipboardList, ChevronDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ClipboardList } from 'lucide-react';
 
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -25,6 +26,7 @@ function OrderDetailModal({ orderId, onClose }) {
                         <div><span className="text-muted">Khách hàng: </span>{order.customer_name || 'Khách lẻ'}</div>
                         <div><span className="text-muted">Thanh toán: </span>{order.payment_method === 'cash' ? '💵 Tiền mặt' : order.payment_method === 'transfer' ? '🏦 Chuyển khoản' : '💳 Thẻ'}</div>
                         <div><span className="text-muted">Trạng thái: </span><span className="badge badge-success">Hoàn thành</span></div>
+                        {order.seller_name && <div style={{ gridColumn: '1/-1' }}><span className="text-muted">Người bán: </span><strong>{order.seller_name}</strong></div>}
                     </div>
                     <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                         <thead><tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
@@ -57,6 +59,7 @@ function OrderDetailModal({ orderId, onClose }) {
 }
 
 export default function Orders() {
+    const { isAdmin } = useAuth();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [from, setFrom] = useState('');
@@ -112,13 +115,23 @@ export default function Orders() {
                     orders.length === 0 ? <div className="empty-state"><ClipboardList size={48} /><p>Chưa có đơn hàng nào</p></div> : (
                         <div className="table-wrap">
                             <table>
-                                <thead><tr><th>Mã đơn</th><th>Thời gian</th><th>Khách hàng</th><th>T.Tiền</th><th>Lợi nhuận</th><th>Thanh toán</th><th></th></tr></thead>
+                                <thead><tr>
+                                    <th>Mã đơn</th>
+                                    <th>Thời gian</th>
+                                    <th>Khách hàng</th>
+                                    {isAdmin() && <th>Người bán</th>}
+                                    <th>T.Tiền</th>
+                                    <th>Lợi nhuận</th>
+                                    <th>Thanh toán</th>
+                                    <th></th>
+                                </tr></thead>
                                 <tbody>
                                     {orders.map(o => (
                                         <tr key={o.id}>
                                             <td><span className="badge badge-primary fw-600">{o.order_code}</span></td>
                                             <td className="text-muted fs-12">{new Date(o.created_at).toLocaleString('vi-VN')}</td>
                                             <td>{o.customer_name || <span className="text-muted">Khách lẻ</span>}</td>
+                                            {isAdmin() && <td><strong>{o.seller_name || <span className="text-muted">—</span>}</strong></td>}
                                             <td className="fw-700">{fmt(o.final_amount)}</td>
                                             <td className="text-success fw-600">{fmt(o.profit)}</td>
                                             <td>

@@ -30,7 +30,7 @@ services:
         condition: service_healthy
     environment:
       PORT: 3001
-      FRONTEND_URL: http://localhost
+      FRONTEND_URL: http://localhost,https://capylumi.shop,http://capylumi.shop
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-salemanage}

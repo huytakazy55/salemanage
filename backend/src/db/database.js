@@ -69,6 +69,7 @@ async function initSchema() {
         image_url TEXT,
         description TEXT,
         is_active BOOLEAN DEFAULT TRUE,
+        commission_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(branch_id, sku)
@@ -101,6 +102,7 @@ async function initSchema() {
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
         store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         order_code TEXT UNIQUE,
         customer_name TEXT,
         customer_phone TEXT,
@@ -113,6 +115,15 @@ async function initSchema() {
         status TEXT DEFAULT 'completed',
         note TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- ── Salary Config ───────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS salary_config (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        base_salary NUMERIC(15,0) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(store_id)
       );
 
       -- ── Order items ─────────────────────────────────────────────
@@ -186,6 +197,23 @@ async function initSchema() {
       ALTER TABLE categories ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE;
       UPDATE categories c SET branch_id = s.branch_id
         FROM stores s WHERE c.store_id = s.id AND c.branch_id IS NULL AND s.branch_id IS NOT NULL;
+
+      -- Employee sales tracking migration
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+      -- Salary config table
+      CREATE TABLE IF NOT EXISTS salary_config (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        base_salary NUMERIC(15,0) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(store_id)
+      );
+
+      -- Per-product commission percentage
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
+      -- Remove old fixed commission column if exists
+      ALTER TABLE salary_config DROP COLUMN IF EXISTS commission_per_item;
     `);
     console.log('✅ Schema initialized');
   } finally {

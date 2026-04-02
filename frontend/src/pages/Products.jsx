@@ -8,7 +8,7 @@ const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://lo
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 function fmtNum(n) { return Number(n || 0).toLocaleString('vi-VN'); }
 
-const EMPTY_FORM = { name: '', sku: '', category_id: '', cost_price: '', stock: '', min_stock: 5, unit: 'cái', description: '' };
+const EMPTY_FORM = { name: '', sku: '', category_id: '', cost_price: '', sell_price: 0, stock: '', min_stock: 5, unit: 'cái', description: '', commission_pct: 0 };
 
 function ProductImg({ src, size = 40 }) {
     const [err, setErr] = useState(false);
@@ -158,6 +158,21 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                             <label className="form-label">Mô tả</label>
                             <textarea className="form-control" rows={2} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Mô tả ngắn..." />
                         </div>
+                        <div className="form-group">
+                            <label className="form-label">% Hoa hồng nhân viên</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                    type="number" className="form-control" style={{ width: 120 }}
+                                    value={form.commission_pct} min="0" max="100" step="0.1"
+                                    onChange={e => set('commission_pct', e.target.value)}
+                                    placeholder="0"
+                                />
+                                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>% doanh thu bán SP này</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                                💡 Nhân viên bán SP này sẽ nhận được {form.commission_pct || 0}% giá trị đơn hàng chứa SP này
+                            </div>
+                        </div>
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="btn btn-outline" onClick={onClose}>Hủy</button>
@@ -235,6 +250,7 @@ export default function Products() {
                                     <th>Giá vốn</th>
                                     <th>Tồn kho</th>
                                     <th>Tình trạng</th>
+                                    {isAdmin() && <th>HH%</th>}
                                     {isAdmin() && <th></th>}
                                 </tr>
                             </thead>
@@ -254,6 +270,13 @@ export default function Products() {
                                         <td>{fmt(p.cost_price)}</td>
                                         <td className={stockClass(p)}>{fmtNum(p.stock)} {p.unit}</td>
                                         <td>{stockBadge(p)}</td>
+                                        {isAdmin() && (
+                                            <td>
+                                                {+p.commission_pct > 0
+                                                    ? <span className="badge badge-primary">{p.commission_pct}%</span>
+                                                    : <span className="text-muted">—</span>}
+                                            </td>
+                                        )}
                                         {isAdmin() && (
                                             <td>
                                                 <div className="flex gap-2">

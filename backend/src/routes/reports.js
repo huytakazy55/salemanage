@@ -28,10 +28,10 @@ router.get('/dashboard', async (req, res) => {
             pool.query(`SELECT COUNT(*)::int as total FROM products WHERE is_active = TRUE ${prodFilter}`),
             pool.query(`SELECT COUNT(*)::int as total FROM products p
                         JOIN store_stock ss ON ss.product_id = p.id
-                        WHERE p.is_active = TRUE AND ss.quantity <= p.min_stock ${prodFilter.replace('store_id','ss.store_id')}`),
+                        WHERE p.is_active = TRUE AND ss.quantity <= p.min_stock ${prodFilter.replace('store_id', 'ss.store_id')}`),
             pool.query(`SELECT COUNT(*)::int as total FROM products p
                         JOIN store_stock ss ON ss.product_id = p.id
-                        WHERE p.is_active = TRUE AND ss.quantity = 0 ${prodFilter.replace('store_id','ss.store_id')}`),
+                        WHERE p.is_active = TRUE AND ss.quantity = 0 ${prodFilter.replace('store_id', 'ss.store_id')}`),
             pool.query(`SELECT created_at::date as date, COALESCE(SUM(final_amount),0) as revenue, COALESCE(SUM(profit),0) as profit, COUNT(*)::int as orders
                         FROM orders WHERE created_at::date >= CURRENT_DATE - INTERVAL '6 days' ${storeFilter}
                         GROUP BY created_at::date ORDER BY date ASC`),
@@ -110,5 +110,78 @@ router.get('/profit', async (req, res) => {
         res.json({ success: true, data: byProduct, summary, period: { from: fromDate, to: toDate } });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
+
+// GET /api/reports/employee-performance
+// Returns per-employee stats for a date range. Admin-only.
+router.get('/employee-performance', async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        const fromDate = from || monthStart();
+        const toDate = to || today();
+        const storeFilter = req.user.role === 'super_admin' ? '' : `AND o.store_id = ${req.user.store_id}`;
+        const empStoreFilter = req.user.role !== 'super_admin' ? `AND u.store_id = ${req.user.store_id}` : '';
+
+        const { rows } = await pool.query(`
+            SELECT
+                u.id as user_id,
+                u.full_name,
+                u.username,
+                s.name as store_name,
+                COUNT(DISTINCT o.id)::int as total_orders,
+                COALESCE(SUM(oi.quantity), 0)::int as total_items,
+                COALESCE(SUM(o.final_amount), 0) as total_revenue,
+                COALESCE(SUM(o.profit), 0) as total_profit
+            FROM users u
+            JOIN stores s ON s.id = u.store_id
+            LEFT JOIN orders o ON o.created_by_user_id = u.id
+                AND o.created_at::date BETWEEN $1 AND $2 ${storeFilter}
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            WHERE u.role = 'employee' AND u.is_active = TRUE ${empStoreFilter}
+            GROUP BY u.id, u.full_name, u.username, s.name
+            ORDER BY total_revenue DESC
+        `, [fromDate, toDate]);
+
+        res.json({ success: true, data: rows, period: { from: fromDate, to: toDate } });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// GET /api/reports/salary
+// Returns salary = base_salary + SUM(oi.subtotal * p.commission_pct / 100)
+router.get('/salary', async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        const fromDate = from || monthStart();
+        const toDate = to || today();
+        const storeFilter = req.user.role === 'super_admin' ? '' : `AND o.store_id = ${req.user.store_id}`;
+        const empStoreFilter = req.user.role !== 'super_admin' ? `AND u.store_id = ${req.user.store_id}` : '';
+
+        const { rows } = await pool.query(`
+            SELECT
+                u.id as user_id,
+                u.full_name,
+                u.username,
+                s.name as store_name,
+                COUNT(DISTINCT o.id)::int as total_orders,
+                COALESCE(SUM(oi.quantity), 0)::int as total_items,
+                COALESCE(SUM(o.final_amount), 0) as total_revenue,
+                COALESCE(sc.base_salary, 0) as base_salary,
+                ROUND(COALESCE(SUM(oi.subtotal * COALESCE(p.commission_pct, 0) / 100), 0)) as commission_earned,
+                COALESCE(sc.base_salary, 0) + ROUND(COALESCE(SUM(oi.subtotal * COALESCE(p.commission_pct, 0) / 100), 0)) as calculated_salary
+            FROM users u
+            JOIN stores s ON s.id = u.store_id
+            LEFT JOIN salary_config sc ON sc.store_id = u.store_id
+            LEFT JOIN orders o ON o.created_by_user_id = u.id
+                AND o.created_at::date BETWEEN $1 AND $2 ${storeFilter}
+            LEFT JOIN order_items oi ON oi.order_id = o.id
+            LEFT JOIN products p ON p.id = oi.product_id
+            WHERE u.role = 'employee' AND u.is_active = TRUE ${empStoreFilter}
+            GROUP BY u.id, u.full_name, u.username, s.name, sc.base_salary
+            ORDER BY calculated_salary DESC
+        `, [fromDate, toDate]);
+
+        res.json({ success: true, data: rows, period: { from: fromDate, to: toDate } });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
 
 module.exports = router;
