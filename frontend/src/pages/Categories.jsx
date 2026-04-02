@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { categoriesApi } from '../services/api';
 import toast from 'react-hot-toast';
 import { Plus, Edit2, Trash2, X, Tag } from 'lucide-react';
@@ -22,7 +22,7 @@ function CatModal({ cat, onClose, onSaved }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
                 <div className="modal-header">
                     <span className="modal-title">{isEdit ? '✏️ Sửa danh mục' : '➕ Thêm danh mục'}</span>
@@ -31,7 +31,7 @@ function CatModal({ cat, onClose, onSaved }) {
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label className="form-label">Tên danh mục *</label>
+                            <label className="form-label">Tên danh mục <span className="req-star">*</span></label>
                             <input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Đèn ngủ LED..." required />
                         </div>
                         <div className="form-group">

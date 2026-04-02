@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { ordersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { ClipboardList, Download } from 'lucide-react';
@@ -15,7 +15,7 @@ function OrderDetailModal({ orderId, onClose }) {
     if (!order) return <div className="modal-overlay"><div className="modal"><div className="spinner-wrap"><div className="spinner" /></div></div></div>;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <span className="modal-title">📋 {order.order_code}</span>

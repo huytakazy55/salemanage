@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Package, Warehouse, ShoppingCart,
-    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp
+    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp, ScrollText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -41,7 +41,10 @@ export default function Sidebar({ open, onClose }) {
                 { to: '/bao-cao', label: 'Báo cáo', icon: BarChart2 },
                 { to: '/nhan-vien', label: 'Nhân viên', icon: TrendingUp },
                 { to: '/nguoi-dung', label: 'Người dùng', icon: Users },
-                ...(isSuperAdmin() ? [{ to: '/cua-hang', label: 'Cửa hàng', icon: Store }] : []),
+                ...(isSuperAdmin() ? [
+                    { to: '/cua-hang', label: 'Cửa hàng', icon: Store },
+                    { to: '/lich-su-thay-doi', label: 'Lịch sử thay đổi', icon: ScrollText },
+                ] : []),
             ]
         }] : []),
     ];

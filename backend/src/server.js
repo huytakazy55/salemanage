@@ -38,6 +38,8 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/salary-config', require('./routes/salary-config'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/audit-logs', require('./routes/audit'));
 
 app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Server đang chạy tốt!', time: new Date().toISOString() });

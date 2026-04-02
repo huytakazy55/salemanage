@@ -13,7 +13,7 @@ function generateOrderCode() {
 
 function storeClause(user, paramOffset = 0) {
     if (user.role === 'super_admin') return { clause: '', params: [], nextIdx: paramOffset + 1 };
-    return { clause: `AND store_id = $${paramOffset + 1}`, params: [user.store_id], nextIdx: paramOffset + 2 };
+    return { clause: `AND o.store_id = $${paramOffset + 1}`, params: [user.store_id], nextIdx: paramOffset + 2 };
 }
 
 // GET /api/orders

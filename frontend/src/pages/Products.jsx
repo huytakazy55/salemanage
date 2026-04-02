@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Plus, Search, Edit2, Trash2, X, Package, Upload, ImageOff, Download, FileSpreadsheet } from 'lucide-react';
 import { exportToExcel, parseExcel } from '../utils/exportExcel';
+import { CurrencyInput, Req, useFormValidate, FieldError } from '../utils/formUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
@@ -28,6 +29,7 @@ function ProductModal({ product, categories, onClose, onSaved }) {
     const [saving, setSaving] = useState(false);
     const fileInputRef = useRef();
     const isEdit = !!product;
+    const { errors, validate, clearError } = useFormValidate();
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -41,7 +43,11 @@ function ProductModal({ product, categories, onClose, onSaved }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!form.name) return toast.error('Vui lòng nhập tên sản phẩm');
+        const ok = validate({
+            name: { value: form.name, message: 'Vui lòng nhập tên sản phẩm' },
+            cost_price: { value: form.cost_price !== '' ? form.cost_price : '', message: 'Vui lòng nhập giá vốn' },
+        });
+        if (!ok) return;
         setSaving(true);
         try {
             const payload = {
@@ -64,7 +70,7 @@ function ProductModal({ product, categories, onClose, onSaved }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <span className="modal-title">{isEdit ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}</span>
@@ -104,8 +110,14 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                         </div>
 
                         <div className="form-group">
-                            <label className="form-label">Tên sản phẩm *</label>
-                            <input className="form-control" value={form.name} onChange={e => set('name', e.target.value)} placeholder="Đèn ngủ LED hình tròn..." required />
+                            <label className="form-label">Tên sản phẩm <Req /></label>
+                            <input
+                                className={`form-control${errors.name ? ' is-invalid' : ''}`}
+                                value={form.name}
+                                onChange={e => { set('name', e.target.value); clearError('name'); }}
+                                placeholder="Đèn ngủ LED hình tròn..."
+                            />
+                            <FieldError error={errors.name} />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
@@ -127,8 +139,14 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label className="form-label">Giá vốn (đ) *</label>
-                            <input type="number" className="form-control" value={form.cost_price} onChange={e => set('cost_price', e.target.value)} placeholder="50000" min="0" />
+                            <label className="form-label">Giá vốn (đ) <Req /></label>
+                            <CurrencyInput
+                                className={`form-control input-currency${errors.cost_price ? ' is-invalid' : ''}`}
+                                value={form.cost_price}
+                                onChange={v => { set('cost_price', v); clearError('cost_price'); }}
+                                placeholder="50.000"
+                            />
+                            <FieldError error={errors.cost_price} />
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>💡 Giá bán sẽ nhập lúc bán hàng để tính lãi chính xác</div>
                         </div>
                         {!isEdit && (
@@ -216,7 +234,7 @@ function ImportModal({ onClose, onImported }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
                 <div className="modal-header">
                     <span className="modal-title">📥 Import sản phẩm từ Excel</span>

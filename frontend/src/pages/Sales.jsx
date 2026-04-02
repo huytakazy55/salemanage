@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { productsApi, ordersApi } from '../services/api';
 import toast from 'react-hot-toast';
 import { ShoppingCart, Search, Minus, Plus, Trash2, CheckCircle, X } from 'lucide-react';
+import { CurrencyInput, Req } from '../utils/formUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
@@ -44,7 +45,7 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
     };
 
     return (
-        <div className="modal-overlay modal-center" onClick={onClose}>
+        <div className="modal-overlay modal-center" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} onKeyDown={handleKeyDown} style={{ maxWidth: 380 }}>
                 <div className="modal-header">
                     <span className="modal-title">🛒 Thêm vào giỏ hàng</span>
@@ -71,16 +72,13 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
                     {/* Price + qty in one row on mobile */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end', marginBottom: 8 }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Giá bán (đ) *</label>
-                            <input
-                                ref={priceRef}
-                                type="number"
-                                className="form-control"
-                                style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', textAlign: 'right', padding: '8px 10px' }}
-                                placeholder="0"
+                            <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Giá bán (đ) <Req /></label>
+                            <CurrencyInput
                                 value={price}
-                                onChange={e => setPrice(e.target.value)}
-                                min="0"
+                                onChange={v => setPrice(v)}
+                                className={`form-control input-currency${!price && price !== '' ? '' : ''}`}
+                                style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary)', padding: '8px 10px' }}
+                                placeholder="0"
                             />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -372,7 +370,7 @@ export default function Sales() {
 
             {/* Success modal */}
             {successOrder && (
-                <div className="modal-overlay modal-center" onClick={() => setSuccessOrder(null)}>
+                <div className="modal-overlay modal-center" onDoubleClick={() => setSuccessOrder(null)}>
                     <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: 'center' }}>
                         <div className="modal-body" style={{ padding: '32px 24px' }}>
                             <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>

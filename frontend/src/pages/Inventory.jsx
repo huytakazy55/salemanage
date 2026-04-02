@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+﻿import { useEffect, useState, useCallback, useRef } from 'react';
 import { productsApi, inventoryApi, transfersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -25,13 +25,13 @@ function ImportModal({ products, onClose, onSaved }) {
         finally { setSaving(false); }
     };
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header"><span className="modal-title">📦 Nhập hàng vào kho</span><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button></div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label className="form-label">Sản phẩm *</label>
+                            <label className="form-label">Sản phẩm <span className="req-star">*</span></label>
                             <select className="form-control" value={form.product_id} onChange={e => setForm(f => ({ ...f, product_id: e.target.value, cost_price: products.find(p => p.id === +e.target.value)?.cost_price || '' }))} required>
                                 <option value="">-- Chọn sản phẩm --</option>
                                 {products.map(p => <option key={p.id} value={p.id}>{p.name} (còn {p.stock} {p.unit})</option>)}
@@ -39,7 +39,7 @@ function ImportModal({ products, onClose, onSaved }) {
                         </div>
                         {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn hiện tại: <strong>{selected.stock} {selected.unit}</strong> | Giá vốn: <strong>{fmt(selected.cost_price)}</strong></div>}
                         <div className="form-row">
-                            <div className="form-group"><label className="form-label">Số lượng *</label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required /></div>
+                            <div className="form-group"><label className="form-label">Số lượng <span className="req-star">*</span></label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required /></div>
                             <div className="form-group"><label className="form-label">Giá nhập mới</label><input type="number" className="form-control" value={form.cost_price} onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))} placeholder={selected?.cost_price || '0'} min="0" /></div>
                         </div>
                         <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-control" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Nhập từ NCC XYZ..." /></div>
@@ -90,7 +90,7 @@ function BulkImportModal({ onClose, onSaved }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
                 <div className="modal-header"><span className="modal-title">📥 Import nhập kho từ Excel</span><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button></div>
                 <div className="modal-body">
@@ -149,12 +149,12 @@ function TransferModal({ products, onClose, onSaved }) {
     };
     const afterQty = selected && form.quantity ? selected.stock - +form.quantity : null;
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
                 <div className="modal-header"><span className="modal-title">🔄 Chuyển hàng sang cửa hàng khác</span><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button></div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
-                        <div className="form-group"><label className="form-label">Sản phẩm *</label>
+                        <div className="form-group"><label className="form-label">Sản phẩm <span className="req-star">*</span></label>
                             <select className="form-control" value={form.product_id} onChange={e => setForm(f => ({ ...f, product_id: e.target.value, quantity: '' }))} required>
                                 <option value="">-- Chọn sản phẩm --</option>
                                 {products.map(p => <option key={p.id} value={p.id} disabled={p.stock === 0}>{p.name} (tồn: {p.stock} {p.unit}){p.stock === 0 ? ' — Hết hàng' : ''}</option>)}
@@ -162,8 +162,8 @@ function TransferModal({ products, onClose, onSaved }) {
                         </div>
                         {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn kho: <strong>{selected.stock} {selected.unit}</strong>{selected.sku && <> · SKU: <strong>{selected.sku}</strong></>}</div>}
                         <div className="form-row">
-                            <div className="form-group"><label className="form-label">Số lượng *</label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" max={selected?.stock} required /></div>
-                            <div className="form-group"><label className="form-label">Chuyển đến *</label>
+                            <div className="form-group"><label className="form-label">Số lượng <span className="req-star">*</span></label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" max={selected?.stock} required /></div>
+                            <div className="form-group"><label className="form-label">Chuyển đến <span className="req-star">*</span></label>
                                 <select className="form-control" value={form.to_store_id} onChange={e => setForm(f => ({ ...f, to_store_id: e.target.value }))} required>
                                     <option value="">-- Chọn cửa hàng --</option>
                                     {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

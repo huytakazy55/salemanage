@@ -504,6 +504,13 @@ tr:hover td {
   margin-bottom: 6px;
 }
 
+/* Dấu * bắt buộc màu đỏ */
+.req-star {
+  color: var(--danger);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
 .form-control {
   width: 100%;
   padding: 9px 12px;
@@ -513,13 +520,46 @@ tr:hover td {
   font-family: inherit;
   color: var(--text-primary);
   background: var(--bg-card);
-  transition: border-color .15s;
+  transition: border-color .15s, box-shadow .15s;
   outline: none;
 }
 
 .form-control:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+}
+
+/* Validation states */
+.form-control.is-invalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.08);
+}
+
+.form-control.is-invalid:focus {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+.form-control.is-valid {
+  border-color: var(--success);
+}
+
+/* Error message dưới field */
+.form-error {
+  color: var(--danger);
+  font-size: 11.5px;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: fadeIn .15s ease;
+}
+
+/* Currency input — right-align số tiền */
+.input-currency {
+  text-align: right;
+  font-weight: 600;
+  letter-spacing: .3px;
 }
 
 .form-row {
@@ -537,6 +577,7 @@ tr:hover td {
 select.form-control {
   cursor: pointer;
 }
+
 
 /* ─── Badges / Tags ─── */
 .badge {
@@ -615,6 +656,21 @@ select.form-control {
   padding: 20px;
   backdrop-filter: blur(3px);
   animation: fadeIn .15s ease;
+  cursor: default;
+  user-select: none;
+}
+
+/* Subtle "double-click to close" hint at bottom of overlay */
+.modal-overlay::after {
+  content: '↖ Double-click ngoài để đóng';
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  pointer-events: none;
+  letter-spacing: .3px;
 }
 
 .modal {

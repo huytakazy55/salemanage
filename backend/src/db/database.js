@@ -214,6 +214,32 @@ async function initSchema() {
       ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
       -- Remove old fixed commission column if exists
       ALTER TABLE salary_config DROP COLUMN IF EXISTS commission_per_item;
+
+      -- ── Extra Expenses (phát sinh) ──────────────────────────────
+      CREATE TABLE IF NOT EXISTS extra_expenses (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        category TEXT NOT NULL DEFAULT 'Khác',
+        description TEXT NOT NULL,
+        amount NUMERIC(15,0) NOT NULL DEFAULT 0,
+        created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- ── Audit Logs ─────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(20) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER,
+        entity_name VARCHAR(255),
+        changed_fields JSONB,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        store_id INTEGER REFERENCES stores(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
     `);
     console.log('✅ Schema initialized');
   } finally {

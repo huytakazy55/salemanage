@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback } from 'react';
 import { usersApi, storesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -34,7 +34,7 @@ function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <span className="modal-title">{isEdit ? '✏️ Sửa người dùng' : '➕ Thêm người dùng'}</span>
@@ -44,12 +44,12 @@ function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
                     <div className="modal-body">
                         {!isEdit && (
                             <div className="form-group">
-                                <label className="form-label">Username *</label>
+                                <label className="form-label">Username <span className="req-star">*</span></label>
                                 <input className="form-control" value={form.username || ''} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="nhanvien2" />
                             </div>
                         )}
                         <div className="form-group">
-                            <label className="form-label">Họ tên *</label>
+                            <label className="form-label">Họ tên <span className="req-star">*</span></label>
                             <input className="form-control" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Nguyễn Văn A" />
                         </div>
 
@@ -78,7 +78,7 @@ function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
                         {/* Store selector — only super_admin can pick store */}
                         {showStorePicker && (
                             <div className="form-group">
-                                <label className="form-label">Cửa hàng *</label>
+                                <label className="form-label">Cửa hàng <span className="req-star">*</span></label>
                                 <select
                                     className="form-control"
                                     value={form.store_id}

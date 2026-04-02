@@ -5,6 +5,7 @@ const fs = require('fs');
 const { pool } = require('../db/database');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
+const { auditLog, diffFields } = require('../utils/audit');
 
 router.use(requireAuth);
 
@@ -228,7 +229,13 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
             query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, commission_pct=$9 WHERE id=$10 RETURNING *`;
             params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, commission_pct || 0, req.params.id];
         }
+        const { rows: [oldProduct] } = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
         const { rows: [product] } = await pool.query(query, params);
+        // Audit log
+        const changed = diffFields(oldProduct, product);
+        await auditLog({ action: 'UPDATE', entityType: 'products', entityId: product?.id,
+            entityName: product?.name, changedFields: changed,
+            userId: req.user.id, storeId: req.user.store_id });
         res.json({ success: true, data: product });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -236,7 +243,10 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
 // DELETE /api/products/:id (soft delete)
 router.delete('/:id', requireAdmin, async (req, res) => {
     try {
+        const { rows: [old] } = await pool.query('SELECT name FROM products WHERE id = $1', [req.params.id]);
         await pool.query('UPDATE products SET is_active = FALSE WHERE id = $1', [req.params.id]);
+        await auditLog({ action: 'DELETE', entityType: 'products', entityId: parseInt(req.params.id),
+            entityName: old?.name, userId: req.user.id, storeId: req.user.store_id });
         res.json({ success: true, message: 'Đã xóa sản phẩm' });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });

@@ -15,6 +15,7 @@ import Categories from './pages/Categories';
 import UsersPage from './pages/Users';
 import StoresPage from './pages/Stores';
 import EmployeeReport from './pages/EmployeeReport';
+import AuditLogs from './pages/AuditLogs';
 
 function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
     const { isAdmin, isSuperAdmin } = useAuth();
@@ -96,6 +97,7 @@ function AppLayout() {
                         <Route path="/nhan-vien" element={<PrivateRoute adminOnly><EmployeeReport /></PrivateRoute>} />
                         <Route path="/nguoi-dung" element={<PrivateRoute adminOnly><UsersPage /></PrivateRoute>} />
                         <Route path="/cua-hang" element={<PrivateRoute superAdminOnly><StoresPage /></PrivateRoute>} />
+                        <Route path="/lich-su-thay-doi" element={<PrivateRoute superAdminOnly><AuditLogs /></PrivateRoute>} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </div>

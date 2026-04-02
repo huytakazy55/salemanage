@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { storesApi, branchesApi } from '../services/api';
 import toast from 'react-hot-toast';
 import { Store, Plus, Edit2, Trash2, Users, GitBranch, X } from 'lucide-react';
@@ -26,7 +26,7 @@ function BranchModal({ branch, onClose, onSave }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
                 <div className="modal-header">
                     <span className="modal-title">{branch ? '✏️ Sửa chi nhánh' : '🏢 Thêm chi nhánh'}</span>
@@ -35,7 +35,7 @@ function BranchModal({ branch, onClose, onSave }) {
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label className="form-label">Tên chi nhánh *</label>
+                            <label className="form-label">Tên chi nhánh <span className="req-star">*</span></label>
                             <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="VD: Chi nhánh Hà Nội" autoFocus />
                         </div>
                     </div>
@@ -78,7 +78,7 @@ function StoreModal({ store, branches, onClose, onSave }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <span className="modal-title">{store ? '✏️ Sửa cửa hàng' : '🏪 Thêm cửa hàng'}</span>
@@ -87,7 +87,7 @@ function StoreModal({ store, branches, onClose, onSave }) {
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label className="form-label">Tên cửa hàng *</label>
+                            <label className="form-label">Tên cửa hàng <span className="req-star">*</span></label>
                             <input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="VD: SaleManage Chi nhánh 1" />
                         </div>
                         <div className="form-group">
