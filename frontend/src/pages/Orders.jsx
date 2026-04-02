@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ordersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Download } from 'lucide-react';
+import { exportToExcel } from '../utils/exportExcel';
 
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -79,6 +80,20 @@ export default function Orders() {
     const totalRevenue = orders.reduce((s, o) => s + +o.final_amount, 0);
     const totalProfit = orders.reduce((s, o) => s + +o.profit, 0);
 
+    const exportExcel = () => {
+        const { isAdmin: _ia } = { isAdmin };
+        const rows = orders.map(o => ({
+            'Mã đơn': o.order_code,
+            'Thời gian': new Date(o.created_at).toLocaleString('vi-VN'),
+            'Khách hàng': o.customer_name || 'Khách lẻ',
+            'Người bán': o.seller_name || '',
+            'Thanh toán': o.payment_method === 'cash' ? 'Tiền mặt' : o.payment_method === 'transfer' ? 'Chuyển khoản' : 'Thẻ',
+            'Doanh thu (đ)': +o.final_amount,
+            'Lợi nhuận (đ)': +o.profit,
+        }));
+        exportToExcel(rows, `don-hang-${from || 'tat-ca'}`, 'Lịch sử đơn hàng');
+    };
+
     return (
         <div>
             <div className="page-header">
@@ -86,6 +101,9 @@ export default function Orders() {
                     <h2>Lịch sử đơn hàng</h2>
                     <p>{orders.length} đơn hàng</p>
                 </div>
+                <button className="btn btn-outline btn-sm" onClick={exportExcel} disabled={orders.length === 0}>
+                    <Download size={14} /> Xuất Excel
+                </button>
             </div>
 
             <div className="filter-bar">

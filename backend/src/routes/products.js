@@ -67,6 +67,90 @@ router.get('/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// POST /api/products/bulk — admin only, import multiple products from Excel
+router.post('/bulk', requireAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { products: items } = req.body;
+        if (!Array.isArray(items) || items.length === 0)
+            return res.status(400).json({ success: false, error: 'Danh sách sản phẩm trống' });
+
+        // Determine branch_id
+        let branchId;
+        if (req.user.role === 'super_admin') {
+            branchId = req.body.branch_id || null;
+        } else {
+            const { rows: [s] } = await pool.query('SELECT branch_id FROM stores WHERE id = $1', [req.user.store_id]);
+            branchId = s?.branch_id || null;
+        }
+        if (!branchId) return res.status(400).json({ success: false, error: 'Cửa hàng chưa được gán chi nhánh' });
+
+        const { rows: branchStores } = await pool.query('SELECT id FROM stores WHERE branch_id = $1 AND is_active = TRUE', [branchId]);
+
+        await client.query('BEGIN');
+        let created = 0, skipped = 0;
+        const errors = [];
+
+        for (const item of items) {
+            const name = (item['Tên sản phẩm'] || item['name'] || '').toString().trim();
+            if (!name) { skipped++; continue; }
+
+            const sku = (item['SKU'] || item['sku'] || '').toString().trim() || null;
+            const cost_price = parseFloat(item['Giá vốn'] || item['cost_price'] || 0) || 0;
+            const stock = parseInt(item['Tồn kho'] || item['stock'] || 0) || 0;
+            const min_stock = parseInt(item['Tồn tối thiểu'] || item['min_stock'] || 5) || 5;
+            const unit = (item['Đơn vị'] || item['unit'] || 'cái').toString().trim();
+            const description = (item['Mô tả'] || item['description'] || '').toString().trim() || null;
+            const commission_pct = parseFloat(item['Hoa hồng %'] || item['commission_pct'] || 0) || 0;
+
+            try {
+                // Check for duplicate SKU manually (works even without unique constraint)
+                if (sku) {
+                    const { rows: exists } = await client.query(
+                        'SELECT id FROM products WHERE branch_id=$1 AND sku=$2 AND is_active=TRUE LIMIT 1',
+                        [branchId, sku]
+                    );
+                    if (exists.length > 0) { skipped++; continue; }
+                }
+
+                const { rows: [product] } = await client.query(`
+                    INSERT INTO products (branch_id, name, sku, cost_price, sell_price, min_stock, unit, description, commission_pct)
+                    VALUES ($1,$2,$3,$4,0,$5,$6,$7,$8) RETURNING *
+                `, [branchId, name, sku || null, cost_price, min_stock, unit, description, commission_pct]);
+
+
+                if (product) {
+                    for (const store of branchStores) {
+                        const qty = store.id === req.user.store_id ? stock : 0;
+                        await client.query(
+                            'INSERT INTO store_stock (product_id, store_id, quantity) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+                            [product.id, store.id, qty]
+                        );
+                    }
+                    if (stock > 0 && req.user.store_id) {
+                        await client.query(
+                            `INSERT INTO inventory_logs (product_id, store_id, type, quantity, cost_price, note) VALUES ($1,$2,'import',$3,$4,'Import từ Excel')`,
+                            [product.id, req.user.store_id, stock, cost_price]
+                        );
+                    }
+                    created++;
+                } else {
+                    skipped++; // duplicate SKU
+                }
+            } catch (e) {
+                errors.push({ name, error: e.message });
+                skipped++;
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Đã thêm ${created} sản phẩm, bỏ qua ${skipped}`, created, skipped, errors });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ success: false, error: err.message });
+    } finally { client.release(); }
+});
+
 // POST /api/products — admin only, creates product at branch level + store_stock for all branch stores
 router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
     const client = await pool.connect();

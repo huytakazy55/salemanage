@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { reportsApi, salaryConfigApi } from '../services/api';
-import { Users, TrendingUp, DollarSign, Save } from 'lucide-react';
+import { Users, TrendingUp, DollarSign, Save, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { exportToExcel } from '../utils/exportExcel';
 
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -52,6 +53,34 @@ export default function EmployeeReport() {
     const totalRevenue = data.reduce((s, r) => s + +(r.total_revenue || 0), 0);
     const totalSalary = tab === 'salary' ? data.reduce((s, r) => s + +(r.calculated_salary || 0), 0) : 0;
 
+    const exportExcel = () => {
+        if (tab === 'salary') {
+            const rows = data.map(r => ({
+                'Nhân viên': r.full_name,
+                'Tên đăng nhập': r.username,
+                'Cửa hàng': r.store_name,
+                'Số đơn': r.total_orders,
+                'SP bán': r.total_items,
+                'Doanh thu (đ)': +r.total_revenue,
+                'Lương cơ bản (đ)': +r.base_salary,
+                'Hoa hồng (đ)': +r.commission_earned,
+                'Tổng lương (đ)': +r.calculated_salary,
+            }));
+            exportToExcel(rows, `bang-luong-${from}-${to}`, 'Bảng lương');
+        } else {
+            const rows = data.map(r => ({
+                'Nhân viên': r.full_name,
+                'Tên đăng nhập': r.username,
+                'Cửa hàng': r.store_name,
+                'Số đơn': r.total_orders,
+                'SP bán': r.total_items,
+                'Doanh thu (đ)': +r.total_revenue,
+                'Lợi nhuận (đ)': +r.total_profit,
+            }));
+            exportToExcel(rows, `doanh-so-nhan-vien-${from}-${to}`, 'Doanh số');
+        }
+    };
+
     return (
         <div>
             <div className="page-header">
@@ -59,6 +88,9 @@ export default function EmployeeReport() {
                     <h2>Hiệu suất nhân viên</h2>
                     <p>Theo dõi doanh số và tính lương nhân viên</p>
                 </div>
+                <button className="btn btn-outline btn-sm" onClick={exportExcel} disabled={data.length === 0}>
+                    <Download size={14} /> Xuất Excel
+                </button>
             </div>
 
             {/* Tabs */}

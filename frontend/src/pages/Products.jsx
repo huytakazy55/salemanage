@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { productsApi, categoriesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, Edit2, Trash2, X, Package, Upload, ImageOff } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, Package, Upload, ImageOff, Download, FileSpreadsheet } from 'lucide-react';
+import { exportToExcel, parseExcel } from '../utils/exportExcel';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
@@ -49,9 +50,9 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                 sell_price: 0,
                 stock: +form.stock,
                 min_stock: +form.min_stock,
+                commission_pct: +form.commission_pct || 0,
                 category_id: form.category_id || null,
             };
-            // Attach image file if selected
             if (imageFile) payload.image = imageFile;
             if (isEdit) await productsApi.update(product.id, payload);
             else await productsApi.create(payload);
@@ -75,15 +76,9 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                         <div className="form-group">
                             <label className="form-label">Ảnh sản phẩm</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                {/* Preview box */}
                                 <div
                                     onClick={() => fileInputRef.current.click()}
-                                    style={{
-                                        width: 90, height: 90, borderRadius: 12, border: '2px dashed var(--border)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer', overflow: 'hidden', flexShrink: 0,
-                                        background: 'var(--bg)', transition: 'border-color .2s',
-                                    }}
+                                    style={{ width: 90, height: 90, borderRadius: 12, border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', flexShrink: 0, background: 'var(--bg)', transition: 'border-color .2s' }}
                                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
                                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                                 >
@@ -184,6 +179,96 @@ function ProductModal({ product, categories, onClose, onSaved }) {
     );
 }
 
+// Import Excel modal
+function ImportModal({ onClose, onImported }) {
+    const [file, setFile] = useState(null);
+    const [preview, setPreview] = useState([]);
+    const [importing, setImporting] = useState(false);
+    const fileRef = useRef();
+
+    const handleFile = async (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        setFile(f);
+        try {
+            const rows = await parseExcel(f);
+            setPreview(rows.slice(0, 5));
+        } catch { toast.error('Không đọc được file Excel'); }
+    };
+
+    const downloadTemplate = () => {
+        const template = [{ 'Tên sản phẩm': 'Ví dụ SP A', 'SKU': 'SP-001', 'Giá vốn': 50000, 'Tồn kho': 10, 'Tồn tối thiểu': 5, 'Đơn vị': 'cái', 'Hoa hồng %': 5, 'Mô tả': '' }];
+        exportToExcel(template, 'mau-import-san-pham', 'Sản phẩm');
+    };
+
+    const handleImport = async () => {
+        if (!file) return;
+        setImporting(true);
+        try {
+            const rows = await parseExcel(file);
+            const res = await productsApi.bulkImport(rows);
+            toast.success(res.message || `Đã nhập ${res.created} sản phẩm`);
+            if (res.errors?.length) toast.error(`${res.errors.length} lỗi: ${res.errors[0]?.error}`);
+            onImported();
+        } catch (err) {
+            toast.error(err.error || 'Lỗi import');
+        } finally { setImporting(false); }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+                <div className="modal-header">
+                    <span className="modal-title">📥 Import sản phẩm từ Excel</span>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+                </div>
+                <div className="modal-body">
+                    <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 14, fontSize: 13 }}>
+                        <div className="fw-600" style={{ marginBottom: 6 }}>📋 Cấu trúc file Excel:</div>
+                        <div className="text-muted" style={{ lineHeight: 1.8 }}>
+                            Cột bắt buộc: <strong>Tên sản phẩm</strong><br />
+                            Cột tùy chọn: SKU · Giá vốn · Tồn kho · Tồn tối thiểu · Đơn vị · Hoa hồng % · Mô tả
+                        </div>
+                        <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={downloadTemplate}>
+                            <Download size={13} /> Tải file mẫu
+                        </button>
+                    </div>
+
+                    <div
+                        style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '24px 0', textAlign: 'center', cursor: 'pointer', marginBottom: 12 }}
+                        onClick={() => fileRef.current.click()}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                    >
+                        <FileSpreadsheet size={36} style={{ color: 'var(--primary)', marginBottom: 8 }} />
+                        <div className="fw-600">{file ? file.name : 'Chọn file Excel (.xlsx, .xls)'}</div>
+                        <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>Click để chọn file</div>
+                        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: 'none' }} />
+                    </div>
+
+                    {preview.length > 0 && (
+                        <div style={{ fontSize: 12 }}>
+                            <div className="text-muted" style={{ marginBottom: 6 }}>Xem trước {preview.length} dòng đầu:</div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                                    <thead><tr>{Object.keys(preview[0]).map(k => <th key={k} style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', textAlign: 'left', whiteSpace: 'nowrap' }}>{k}</th>)}</tr></thead>
+                                    <tbody>{preview.map((r, i) => <tr key={i}>{Object.values(r).map((v, j) => <td key={j} style={{ padding: '4px 8px', borderBottom: '1px solid var(--border-light)', whiteSpace: 'nowrap' }}>{String(v)}</td>)}</tr>)}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+                    <button className="btn btn-primary" onClick={handleImport} disabled={!file || importing}>
+                        {importing ? 'Đang nhập...' : '📥 Nhập sản phẩm'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Products() {
     const { isAdmin } = useAuth();
     const [products, setProducts] = useState([]);
@@ -192,6 +277,7 @@ export default function Products() {
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('');
     const [modal, setModal] = useState(null);
+    const [showImport, setShowImport] = useState(false);
 
     const load = useCallback(() => {
         const params = {};
@@ -211,6 +297,20 @@ export default function Products() {
         catch { toast.error('Có lỗi xảy ra'); }
     };
 
+    const exportExcel = () => {
+        const rows = products.map(p => ({
+            'Tên sản phẩm': p.name,
+            'SKU': p.sku || '',
+            'Danh mục': p.category_name || '',
+            'Giá vốn (đ)': +p.cost_price,
+            'Tồn kho': +p.stock,
+            'Đơn vị': p.unit,
+            'Hoa hồng %': +p.commission_pct,
+            'Mô tả': p.description || '',
+        }));
+        exportToExcel(rows, 'danh-sach-san-pham', 'Sản phẩm');
+    };
+
     const stockClass = (p) => p.stock === 0 ? 'stock-out' : p.stock <= p.min_stock ? 'stock-low' : 'stock-ok';
     const stockBadge = (p) => p.stock === 0 ? <span className="badge badge-danger">Hết hàng</span> : p.stock <= p.min_stock ? <span className="badge badge-warning">Sắp hết</span> : <span className="badge badge-success">Còn hàng</span>;
 
@@ -221,7 +321,17 @@ export default function Products() {
                     <h2>Quản lý sản phẩm</h2>
                     <p>{products.length} sản phẩm {search || filterCat ? '(đã lọc)' : 'trong kho'}</p>
                 </div>
-                {isAdmin() && <button className="btn btn-primary" onClick={() => setModal('add')}><Plus size={15} /> Thêm sản phẩm</button>}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-outline btn-sm" onClick={exportExcel} disabled={products.length === 0}>
+                        <Download size={14} /> Xuất Excel
+                    </button>
+                    {isAdmin() && (
+                        <button className="btn btn-outline btn-sm" onClick={() => setShowImport(true)}>
+                            <FileSpreadsheet size={14} /> Import Excel
+                        </button>
+                    )}
+                    {isAdmin() && <button className="btn btn-primary" onClick={() => setModal('add')}><Plus size={15} /> Thêm sản phẩm</button>}
+                </div>
             </div>
 
             <div className="filter-bar">
@@ -299,6 +409,12 @@ export default function Products() {
                     categories={categories}
                     onClose={() => setModal(null)}
                     onSaved={() => { setModal(null); load(); }}
+                />
+            )}
+            {showImport && (
+                <ImportModal
+                    onClose={() => setShowImport(false)}
+                    onImported={() => { setShowImport(false); load(); }}
                 />
             )}
         </div>

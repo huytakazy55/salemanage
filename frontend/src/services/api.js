@@ -44,6 +44,7 @@ export const productsApi = {
         return api.put(`/products/${id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
     },
     delete: (id) => api.delete(`/products/${id}`),
+    bulkImport: (products) => api.post('/products/bulk', { products }),
 };
 
 export const categoriesApi = {
@@ -57,6 +58,7 @@ export const inventoryApi = {
     getLogs: (params) => api.get('/inventory', { params }),
     import: (data) => api.post('/inventory/import', data),
     adjust: (data) => api.post('/inventory/adjust', data),
+    bulkImport: (items) => api.post('/inventory/bulk', { items }),
 };
 
 export const ordersApi = {

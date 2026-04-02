@@ -34,6 +34,71 @@ router.get('/', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// POST /api/inventory/bulk — bulk import from Excel
+router.post('/bulk', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { items } = req.body;
+        if (!Array.isArray(items) || items.length === 0)
+            return res.status(400).json({ success: false, error: 'Danh sách trống' });
+
+        const storeId = req.user.store_id;
+        if (!storeId) return res.status(400).json({ success: false, error: 'Không xác định được cửa hàng' });
+
+        await client.query('BEGIN');
+        let success = 0, skipped = 0;
+        const errors = [];
+
+        for (const item of items) {
+            const sku = (item['SKU'] || item['sku'] || '').toString().trim();
+            const name = (item['Tên sản phẩm'] || item['name'] || '').toString().trim();
+            const quantity = parseInt(item['Số lượng'] || item['quantity'] || 0);
+            const cost_price = parseFloat(item['Giá nhập'] || item['cost_price'] || 0) || null;
+            const note = (item['Ghi chú'] || item['note'] || 'Nhập kho Excel').toString().trim();
+
+            if (!quantity || quantity <= 0) { skipped++; continue; }
+
+            // Find product by SKU or name
+            let productId;
+            try {
+                if (sku) {
+                    const { rows } = await client.query(
+                        `SELECT p.id FROM products p JOIN store_stock ss ON ss.product_id = p.id WHERE p.sku = $1 AND ss.store_id = $2 LIMIT 1`,
+                        [sku, storeId]
+                    );
+                    productId = rows[0]?.id;
+                }
+                if (!productId && name) {
+                    const { rows } = await client.query(
+                        `SELECT p.id FROM products p JOIN store_stock ss ON ss.product_id = p.id WHERE p.name ILIKE $1 AND ss.store_id = $2 LIMIT 1`,
+                        [name, storeId]
+                    );
+                    productId = rows[0]?.id;
+                }
+                if (!productId) { errors.push({ row: sku || name, error: 'Không tìm thấy sản phẩm' }); skipped++; continue; }
+
+                await client.query(
+                    `INSERT INTO store_stock (product_id, store_id, quantity)
+                     VALUES ($1,$2,$3) ON CONFLICT (product_id, store_id) DO UPDATE SET quantity = store_stock.quantity + $3`,
+                    [productId, storeId, quantity]
+                );
+                if (cost_price) await client.query('UPDATE products SET cost_price=$1 WHERE id=$2', [cost_price, productId]);
+                await client.query(
+                    `INSERT INTO inventory_logs (product_id, store_id, type, quantity, cost_price, note) VALUES ($1,$2,'import',$3,$4,$5)`,
+                    [productId, storeId, quantity, cost_price, note]
+                );
+                success++;
+            } catch (e) { errors.push({ row: sku || name, error: e.message }); skipped++; }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Đã nhập ${success} dòng, bỏ qua ${skipped}`, success_count: success, skipped, errors });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ success: false, error: err.message });
+    } finally { client.release(); }
+});
+
 // POST /api/inventory/import — nhập kho (cộng store_stock)
 router.post('/import', async (req, res) => {
     const client = await pool.connect();

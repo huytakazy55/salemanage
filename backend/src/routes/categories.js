@@ -61,6 +61,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
 // DELETE /api/categories/:id
 router.delete('/:id', requireAdmin, async (req, res) => {
     try {
+        // Unlink products first to avoid FK constraint error
+        await pool.query('UPDATE products SET category_id = NULL WHERE category_id = $1', [req.params.id]);
         await pool.query('DELETE FROM categories WHERE id = $1', [req.params.id]);
         res.json({ success: true, message: 'Đã xóa danh mục' });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }

@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { reportsApi } from '../services/api';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { Download } from 'lucide-react';
+import { exportToExcel } from '../utils/exportExcel';
 
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -58,6 +60,17 @@ export default function Reports() {
     const s = revenueData?.summary || {};
     const margin = s.total_revenue > 0 ? Math.round(s.total_profit / s.total_revenue * 100) : 0;
 
+    const exportRevenue = () => {
+        const rows = (revenueData?.data || []).map(d => ({
+            'Kỳ': d.period,
+            'Doanh thu (đ)': Math.round(d.revenue),
+            'Giá vốn (đ)': Math.round(d.cost),
+            'Lợi nhuận (đ)': Math.round(d.profit),
+            'Số đơn': d.orders,
+        }));
+        exportToExcel(rows, `bao-cao-doanh-thu-${from}`, 'Doanh thu');
+    };
+
     return (
         <div>
             <div className="page-header">
@@ -65,6 +78,9 @@ export default function Reports() {
                     <h2>Báo cáo Doanh thu & Lãi lỗ</h2>
                     <p>Thống kê chi tiết theo thời gian</p>
                 </div>
+                <button className="btn btn-outline btn-sm" onClick={exportRevenue} disabled={!revenueData}>
+                    <Download size={14} /> Xuất Excel
+                </button>
             </div>
 
             {/* Filter */}
