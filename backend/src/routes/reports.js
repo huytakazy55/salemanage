@@ -3,7 +3,10 @@ const router = express.Router();
 const { pool } = require('../db/database');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth);
+
+// Most report routes are admin-only — applied per route below
+// /shift is accessible by all authenticated users
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => today().slice(0, 7) + '-01';
@@ -16,7 +19,7 @@ function sf(user, tableAlias = 'o') {
 }
 
 // GET /api/reports/dashboard
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', requireAdmin, async (req, res) => {
     try {
         const t = today(), ms = monthStart();
         const storeFilter = req.user.role === 'super_admin' ? '' : `AND store_id = ${req.user.store_id}`;
@@ -55,7 +58,7 @@ router.get('/dashboard', async (req, res) => {
 });
 
 // GET /api/reports/revenue
-router.get('/revenue', async (req, res) => {
+router.get('/revenue', requireAdmin, async (req, res) => {
     try {
         const { from, to, group_by = 'day' } = req.query;
         const fromDate = from || monthStart();
@@ -85,7 +88,7 @@ router.get('/revenue', async (req, res) => {
 });
 
 // GET /api/reports/profit
-router.get('/profit', async (req, res) => {
+router.get('/profit', requireAdmin, async (req, res) => {
     try {
         const { from, to } = req.query;
         const fromDate = from || monthStart();
@@ -113,7 +116,7 @@ router.get('/profit', async (req, res) => {
 
 // GET /api/reports/employee-performance
 // Returns per-employee stats for a date range. Admin-only.
-router.get('/employee-performance', async (req, res) => {
+router.get('/employee-performance', requireAdmin, async (req, res) => {
     try {
         const { from, to } = req.query;
         const fromDate = from || monthStart();
@@ -147,7 +150,7 @@ router.get('/employee-performance', async (req, res) => {
 
 // GET /api/reports/salary
 // Returns salary = base_salary + SUM(oi.subtotal * p.commission_pct / 100)
-router.get('/salary', async (req, res) => {
+router.get('/salary', requireAdmin, async (req, res) => {
     try {
         const { from, to } = req.query;
         const fromDate = from || monthStart();
@@ -180,6 +183,80 @@ router.get('/salary', async (req, res) => {
         `, [fromDate, toDate]);
 
         res.json({ success: true, data: rows, period: { from: fromDate, to: toDate } });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// GET /api/reports/shift?from=ISO&to=ISO — available to both admin and employee (but profit/seller breakdown only for admin)
+router.get('/shift', async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        if (!from || !to) return res.status(400).json({ success: false, error: 'Cần from và to' });
+        const storeFilter = req.user.role === 'super_admin' ? '' : `AND o.store_id = ${req.user.store_id}`;
+        // Also filter by seller for employees
+        const sellerFilter = req.user.role === 'employee' ? `AND o.created_by_user_id = ${req.user.id}` : '';
+
+        const [summary, byPayment, topProducts, bySeller, orders] = await Promise.all([
+            pool.query(`
+                SELECT
+                    COUNT(*)::int as total_orders,
+                    COALESCE(SUM(final_amount),0) as total_revenue,
+                    COALESCE(SUM(profit),0) as total_profit,
+                    COALESCE(SUM(discount),0) as total_discount
+                FROM orders o
+                WHERE o.created_at >= $1::timestamptz AND o.created_at <= $2::timestamptz
+                ${storeFilter} ${sellerFilter}
+            `, [from, to]),
+
+            pool.query(`
+                SELECT payment_method, COUNT(*)::int as orders, COALESCE(SUM(final_amount),0) as revenue
+                FROM orders o
+                WHERE o.created_at >= $1::timestamptz AND o.created_at <= $2::timestamptz
+                ${storeFilter} ${sellerFilter}
+                GROUP BY payment_method
+            `, [from, to]),
+
+            pool.query(`
+                SELECT oi.product_name, SUM(oi.quantity)::int as qty, COALESCE(SUM(oi.subtotal),0) as revenue
+                FROM order_items oi
+                JOIN orders o ON oi.order_id = o.id
+                WHERE o.created_at >= $1::timestamptz AND o.created_at <= $2::timestamptz
+                ${storeFilter} ${sellerFilter}
+                GROUP BY oi.product_name ORDER BY qty DESC LIMIT 10
+            `, [from, to]),
+
+            pool.query(`
+                SELECT u.full_name as seller_name, COUNT(o.id)::int as orders,
+                       COALESCE(SUM(o.final_amount),0) as revenue
+                FROM orders o
+                LEFT JOIN users u ON o.created_by_user_id = u.id
+                WHERE o.created_at >= $1::timestamptz AND o.created_at <= $2::timestamptz
+                ${storeFilter}
+                GROUP BY u.full_name ORDER BY revenue DESC
+            `, [from, to]),
+
+            pool.query(`
+                SELECT o.order_code, o.created_at, o.final_amount, o.profit, o.discount,
+                       o.payment_method, o.customer_name, u.full_name as seller_name
+                FROM orders o
+                LEFT JOIN users u ON o.created_by_user_id = u.id
+                WHERE o.created_at >= $1::timestamptz AND o.created_at <= $2::timestamptz
+                ${storeFilter} ${sellerFilter}
+                ORDER BY o.created_at DESC
+            `, [from, to]),
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                summary: summary.rows[0],
+                by_payment: byPayment.rows,
+                top_products: topProducts.rows,
+                by_seller: bySeller.rows,
+                orders: orders.rows,
+            },
+            period: { from, to },
+            isAdmin: req.user.role !== 'employee',
+        });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

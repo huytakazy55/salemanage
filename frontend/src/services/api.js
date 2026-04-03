@@ -73,6 +73,7 @@ export const reportsApi = {
     getProfit: (params) => api.get('/reports/profit', { params }),
     getEmployeePerformance: (params) => api.get('/reports/employee-performance', { params }),
     getSalary: (params) => api.get('/reports/salary', { params }),
+    getShift: (params) => api.get('/reports/shift', { params }),
 };
 
 export const salaryConfigApi = {

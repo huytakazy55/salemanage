@@ -21,10 +21,15 @@ function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
         e.preventDefault();
         if (!isEdit && (!form.username || !form.password)) return toast.error('Username và mật khẩu là bắt buộc');
         if (!isEdit && !form.full_name) return toast.error('Họ tên là bắt buộc');
-        if (roleNeedsStore && !form.store_id) return toast.error('Vui lòng chọn cửa hàng');
+        // Only require store selection when super_admin can pick a store
+        if (showStorePicker && !form.store_id) return toast.error('Vui lòng chọn cửa hàng');
         setSaving(true);
         try {
-            const data = { ...form, store_id: roleNeedsStore ? form.store_id : null };
+            const data = {
+                ...form,
+                // super_admin picks store; admin auto-assigns their own store (backend handles it)
+                store_id: showStorePicker ? form.store_id : undefined,
+            };
             if (isEdit) await usersApi.update(user.id, data);
             else await usersApi.create(data);
             toast.success(isEdit ? 'Đã cập nhật!' : 'Đã tạo tài khoản!');

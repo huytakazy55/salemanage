@@ -18,6 +18,7 @@ import UsersPage from './pages/Users';
 import StoresPage from './pages/Stores';
 import EmployeeReport from './pages/EmployeeReport';
 import AuditLogs from './pages/AuditLogs';
+import ShiftReport from './pages/ShiftReport';
 
 function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
     const { isAdmin, isSuperAdmin } = useAuth();
@@ -122,6 +123,7 @@ function AppLayout() {
                         } />
                         <Route path="/ban-hang" element={<Sales />} />
                         <Route path="/don-hang" element={<Orders />} />
+                        <Route path="/ca-lam-viec" element={<ShiftReport />} />
                         <Route path="/san-pham" element={<Products />} />
                         <Route path="/kho-hang" element={<Inventory />} />
                         <Route path="/danh-muc" element={<PrivateRoute adminOnly><Categories /></PrivateRoute>} />

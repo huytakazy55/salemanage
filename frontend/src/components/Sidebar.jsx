@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Package, Warehouse, ShoppingCart,
-    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp, ScrollText
+    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp, ScrollText, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -27,6 +27,7 @@ export default function Sidebar({ open, onClose }) {
             items: [
                 { to: '/ban-hang', label: 'Bán hàng (POS)', icon: ShoppingCart },
                 { to: '/don-hang', label: 'Lịch sử đơn hàng', icon: ClipboardList },
+                { to: '/ca-lam-viec', label: 'Tổng kết ca', icon: Clock },
             ]
         },
         {
