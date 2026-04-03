@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const eventBus = require('../utils/eventBus');
 
 router.use(requireAuth);
 
@@ -125,6 +126,23 @@ router.post('/', async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Create notification for store admin
+        if (storeId) {
+            try {
+                const itemSummary = resolvedItems.slice(0, 2)
+                    .map(i => `${i.product.name} x${i.quantity}`)
+                    .join(', ') + (resolvedItems.length > 2 ? ` +${resolvedItems.length - 2} sp khác` : '');
+                const body = `👤 ${req.user.full_name} | 📦 ${itemSummary} | 💰 ${finalAmount.toLocaleString('vi-VN')}đ`;
+                const { rows: [notif] } = await pool.query(
+                    `INSERT INTO notifications (store_id, type, title, body, order_id) VALUES ($1,'new_order',$2,$3,$4) RETURNING *`,
+                    [storeId, `🛒 Đơn hàng mới #${orderCode}`, body, order.id]
+                );
+                // Push real-time to SSE subscribers of this store
+                eventBus.emit(`store:${storeId}`, notif);
+            } catch (_) { /* non-blocking */ }
+        }
+
         res.status(201).json({ success: true, data: order, message: 'Tạo đơn hàng thành công' });
     } catch (err) {
         await client.query('ROLLBACK');

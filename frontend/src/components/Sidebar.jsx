@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
+
 export default function Sidebar({ open, onClose }) {
     const { user, logout, isAdmin, isSuperAdmin } = useAuth();
 

@@ -196,6 +196,11 @@ export default function Sales() {
                 discount: +discount,
                 payment_method: payMethod,
             });
+            // Play confirmation sound for the seller
+            try {
+                const audio = new Audio('/Sound/ribhavagrawal-notification-sound-type-19-no-copyright-410278.mp3');
+                audio.play().catch(() => { });
+            } catch (_) { }
             setSuccessOrder(result.data);
             setCart([]); setDiscount(0); setCustomerName(''); setCartOpen(false);
             toast.success('Đặt hàng thành công!');

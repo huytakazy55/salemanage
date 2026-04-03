@@ -240,6 +240,19 @@ async function initSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+
+      -- ── Notifications ───────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        store_id INTEGER REFERENCES stores(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL DEFAULT 'new_order',
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_store_read ON notifications(store_id, is_read, created_at DESC);
     `);
     console.log('✅ Schema initialized');
   } finally {

@@ -11,19 +11,28 @@ const monthStart = () => today().slice(0, 7) + '-01';
 
 // ─── Import Hàng Modal ───────────────────────────────────────────
 function ImportModal({ products, onClose, onSaved }) {
-    const [form, setForm] = useState({ product_id: '', quantity: '', cost_price: '', note: '' });
+    const [form, setForm] = useState({ product_id: '', quantity: '', cost_price: '', total_amount: '', note: '' });
+    const [priceMode, setPriceMode] = useState('unit'); // 'unit' | 'total'
     const [saving, setSaving] = useState(false);
     const selected = products.find(p => p.id === +form.product_id);
+
+    // Auto-compute unit price when in total mode
+    const computedUnitPrice = priceMode === 'total' && form.total_amount && form.quantity
+        ? Math.round(+form.total_amount / +form.quantity)
+        : null;
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.product_id || !form.quantity) return toast.error('Vui lòng chọn sản phẩm và số lượng');
+        const finalCostPrice = priceMode === 'total' ? computedUnitPrice : (form.cost_price ? +form.cost_price : undefined);
         setSaving(true);
         try {
-            await inventoryApi.import({ product_id: +form.product_id, quantity: +form.quantity, cost_price: form.cost_price ? +form.cost_price : undefined, note: form.note });
+            await inventoryApi.import({ product_id: +form.product_id, quantity: +form.quantity, cost_price: finalCostPrice, note: form.note });
             toast.success('Nhập kho thành công!'); onSaved();
         } catch (err) { toast.error(err.error || 'Có lỗi xảy ra'); }
         finally { setSaving(false); }
     };
+
     return (
         <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
@@ -37,11 +46,64 @@ function ImportModal({ products, onClose, onSaved }) {
                                 {products.map(p => <option key={p.id} value={p.id}>{p.name} (còn {p.stock} {p.unit})</option>)}
                             </select>
                         </div>
-                        {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn hiện tại: <strong>{selected.stock} {selected.unit}</strong> | Giá vốn: <strong>{fmt(selected.cost_price)}</strong></div>}
-                        <div className="form-row">
-                            <div className="form-group"><label className="form-label">Số lượng <span className="req-star">*</span></label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required /></div>
-                            <div className="form-group"><label className="form-label">Giá nhập mới</label><input type="number" className="form-control" value={form.cost_price} onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))} placeholder={selected?.cost_price || '0'} min="0" /></div>
+                        {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn hiện tại: <strong>{selected.stock} {selected.unit}</strong> | Giá vốn hiện tại: <strong>{fmt(selected.cost_price)}</strong></div>}
+
+                        <div className="form-group">
+                            <label className="form-label">Số lượng nhập <span className="req-star">*</span></label>
+                            <input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required placeholder="0" />
                         </div>
+
+                        {/* Price mode toggle */}
+                        <div className="form-group">
+                            <label className="form-label">Cách nhập giá vốn</label>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${priceMode === 'unit' ? 'btn-primary' : 'btn-outline'}`}
+                                    onClick={() => setPriceMode('unit')}
+                                    style={{ flex: 1 }}
+                                >
+                                    💰 Giá 1 sản phẩm
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${priceMode === 'total' ? 'btn-primary' : 'btn-outline'}`}
+                                    onClick={() => setPriceMode('total')}
+                                    style={{ flex: 1 }}
+                                >
+                                    🧾 Tổng tiền hàng
+                                </button>
+                            </div>
+
+                            {priceMode === 'unit' ? (
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    value={form.cost_price}
+                                    onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))}
+                                    placeholder={selected?.cost_price ? `Hiện tại: ${Number(selected.cost_price).toLocaleString('vi-VN')}` : 'Giá mỗi sản phẩm...'}
+                                    min="0"
+                                />
+                            ) : (
+                                <>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        value={form.total_amount}
+                                        onChange={e => setForm(f => ({ ...f, total_amount: e.target.value }))}
+                                        placeholder="Tổng tiền đã trả (kể cả ship, phí...)..."
+                                        min="0"
+                                    />
+                                    {computedUnitPrice !== null && (
+                                        <div style={{ marginTop: 8, padding: '7px 12px', background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#2563eb', fontWeight: 600 }}>
+                                            📌 Giá vốn mỗi {selected?.unit || 'sản phẩm'}: <strong>{computedUnitPrice.toLocaleString('vi-VN')}đ</strong>
+                                            <span style={{ fontWeight: 400, color: '#64748b', marginLeft: 8 }}>({fmt(form.total_amount)} ÷ {form.quantity})</span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
                         <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-control" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Nhập từ NCC XYZ..." /></div>
                         {form.quantity && selected && <div style={{ padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>Sau nhập: {+selected.stock + +form.quantity} {selected.unit}</div>}
                     </div>

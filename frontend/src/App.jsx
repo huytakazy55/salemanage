@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Menu, LayoutDashboard, ShoppingCart, ClipboardList, Warehouse, MoreHorizontal } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
+import NotificationBell from './components/NotificationBell';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -57,6 +59,7 @@ function MobileBottomNav({ onOpenSidebar }) {
 
 function AppLayout() {
     const { user, loading } = useAuth();
+    const { dark, toggle } = useTheme();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     if (loading) return (
@@ -81,7 +84,32 @@ function AppLayout() {
                         <Menu size={20} />
                     </button>
                     <span className="mobile-topbar-title">📊 SaleManage</span>
-                    <div style={{ width: 36 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <NotificationBell />
+                        <button
+                            className="theme-toggle-topbar"
+                            onClick={toggle}
+                            aria-label="Chuyển chế độ sáng/tối"
+                            title={dark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
+                        >
+                            {dark ? '☀️' : '🌙'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Desktop floating theme toggle — bottom right */}
+                <button
+                    className="theme-toggle-fab"
+                    onClick={toggle}
+                    aria-label="Chuyển chế độ sáng/tối"
+                    title={dark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
+                >
+                    {dark ? '☀️' : '🌙'}
+                </button>
+
+                {/* Desktop notification bell FAB — above theme toggle */}
+                <div className="notif-fab-wrapper">
+                    <NotificationBell />
                 </div>
 
                 {/* Page content wrapper — handles all padding */}
