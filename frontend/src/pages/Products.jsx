@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://lo
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 function fmtNum(n) { return Number(n || 0).toLocaleString('vi-VN'); }
 
-const EMPTY_FORM = { name: '', sku: '', category_id: '', cost_price: '', sell_price: 0, stock: '', min_stock: 5, unit: 'cái', description: '', commission_pct: 0 };
+const EMPTY_FORM = { name: '', sku: '', category_id: '', cost_price: '', sell_price: 0, suggested_price: '', stock: '', min_stock: 5, unit: 'cái', description: '', commission_pct: 0 };
 
 function ProductImg({ src, size = 40 }) {
     const [err, setErr] = useState(false);
@@ -45,9 +45,12 @@ function ProductModal({ product, categories, onClose, onSaved }) {
         e.preventDefault();
         const ok = validate({
             name: { value: form.name, message: 'Vui lòng nhập tên sản phẩm' },
-            cost_price: { value: form.cost_price !== '' ? form.cost_price : '', message: 'Vui lòng nhập giá vốn' },
+            cost_price: { value: form.cost_price !== '' && form.cost_price !== null ? form.cost_price : '', message: 'Vui lòng nhập giá vốn' },
         });
-        if (!ok) return;
+        if (!ok) {
+            toast.error('Vui lòng kiểm tra lại các trường bắt buộc — ô viền đỏ là chưa hợp lệ');
+            return;
+        }
         setSaving(true);
         try {
             const payload = {
@@ -58,6 +61,7 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                 min_stock: +form.min_stock,
                 commission_pct: +form.commission_pct || 0,
                 category_id: form.category_id || null,
+                suggested_price: +form.suggested_price || 0,
             };
             if (imageFile) payload.image = imageFile;
             if (isEdit) await productsApi.update(product.id, payload);
@@ -65,7 +69,9 @@ function ProductModal({ product, categories, onClose, onSaved }) {
             toast.success(isEdit ? 'Đã cập nhật sản phẩm!' : 'Đã thêm sản phẩm!');
             onSaved();
         } catch (err) {
-            toast.error(err.error || 'Có lỗi xảy ra');
+            const msg = err?.error || err?.message || (typeof err === 'string' ? err : JSON.stringify(err));
+            toast.error(msg || 'Có lỗi xảy ra');
+            console.error('[Product save error]', err);
         } finally { setSaving(false); }
     };
 
@@ -76,7 +82,7 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                     <span className="modal-title">{isEdit ? '✏️ Sửa sản phẩm' : '➕ Thêm sản phẩm mới'}</span>
                     <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
                 </div>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                     <div className="modal-body">
                         {/* Image upload */}
                         <div className="form-group">
@@ -138,17 +144,29 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
-                        <div className="form-group">
-                            <label className="form-label">Giá vốn (đ) <Req /></label>
-                            <CurrencyInput
-                                className={`form-control input-currency${errors.cost_price ? ' is-invalid' : ''}`}
-                                value={form.cost_price}
-                                onChange={v => { set('cost_price', v); clearError('cost_price'); }}
-                                placeholder="50.000"
-                            />
-                            <FieldError error={errors.cost_price} />
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>💡 Giá bán sẽ nhập lúc bán hàng để tính lãi chính xác</div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">Giá vốn (đ) <Req /></label>
+                                <CurrencyInput
+                                    className={`form-control input-currency${errors.cost_price ? ' is-invalid' : ''}`}
+                                    value={form.cost_price}
+                                    onChange={v => { set('cost_price', v); clearError('cost_price'); }}
+                                    placeholder="50.000"
+                                />
+                                <FieldError error={errors.cost_price} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Giá đề xuất cho NV (đ)</label>
+                                <CurrencyInput
+                                    className="form-control input-currency"
+                                    value={form.suggested_price}
+                                    onChange={v => set('suggested_price', v)}
+                                    placeholder="70.000"
+                                />
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Giá gợi ý hiển thị cho nhân viên khi bán hàng</div>
+                            </div>
                         </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>💡 Giá bán thực tế sẽ nhập lúc bán hàng để tính lãi chính xác</div>
                         {!isEdit && (
                             <div className="form-row">
                                 <div className="form-group">
@@ -375,7 +393,7 @@ export default function Products() {
                                 <tr>
                                     <th>Sản phẩm</th>
                                     <th>Danh mục</th>
-                                    <th>Giá vốn</th>
+                                    {isAdmin() ? <th>Giá vốn</th> : <th>Giá đề xuất</th>}
                                     <th>Tồn kho</th>
                                     <th>Tình trạng</th>
                                     {isAdmin() && <th>HH%</th>}
@@ -395,7 +413,7 @@ export default function Products() {
                                             </div>
                                         </td>
                                         <td>{p.category_name ? <span className="badge badge-primary">{p.category_name}</span> : <span className="text-muted">—</span>}</td>
-                                        <td>{fmt(p.cost_price)}</td>
+                                        {isAdmin() ? <td>{fmt(p.cost_price)}</td> : <td>{p.suggested_price > 0 ? fmt(p.suggested_price) : <span className="text-muted">—</span>}</td>}
                                         <td className={stockClass(p)}>{fmtNum(p.stock)} {p.unit}</td>
                                         <td>{stockBadge(p)}</td>
                                         {isAdmin() && (

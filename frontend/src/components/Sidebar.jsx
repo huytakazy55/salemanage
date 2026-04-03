@@ -19,7 +19,8 @@ export default function Sidebar({ open, onClose }) {
     const navGroups = [
         {
             label: 'Tổng quan',
-            items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }]
+            items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }],
+            adminOnly: true, // hide from employees
         },
         {
             label: 'Bán hàng',
@@ -74,7 +75,7 @@ export default function Sidebar({ open, onClose }) {
                 </div>
 
                 <nav className="sidebar-nav">
-                    {navGroups.map(group => (
+                    {navGroups.filter(g => !g.adminOnly || isAdmin()).map(group => (
                         <div className="nav-group" key={group.label}>
                             <div className="nav-group-label">{group.label}</div>
                             {group.items.map(item => (

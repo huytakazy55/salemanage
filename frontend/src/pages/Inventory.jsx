@@ -248,6 +248,7 @@ function TransferModal({ products, onClose, onSaved }) {
 // ─── Main Component ───────────────────────────────────────────────
 export default function Inventory() {
     const { isAdmin } = useAuth();
+    const isEmployee = !isAdmin();
     const [products, setProducts] = useState([]);
     const [logs, setLogs] = useState([]);
     const [transferLogs, setTransferLogs] = useState([]);
@@ -365,7 +366,7 @@ export default function Inventory() {
                         {loading ? <div className="spinner-wrap"><div className="spinner" /></div> : (
                             <div className="table-wrap">
                                 <table>
-                                    <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Tồn kho</th><th>Tối thiểu</th><th>Giá vốn</th><th>Giá trị tồn</th><th>Tình trạng</th></tr></thead>
+                                    <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Tồn kho</th><th>Tối thiểu</th>{!isEmployee && <th>Giá vốn</th>}{!isEmployee && <th>Giá trị tồn</th>}<th>Tình trạng</th></tr></thead>
                                     <tbody>
                                         {displayed.map(p => (
                                             <tr key={p.id} style={p.stock === 0 ? { background: '#fff7f7' } : p.stock <= p.min_stock ? { background: '#fffbeb' } : {}}>
@@ -373,8 +374,8 @@ export default function Inventory() {
                                                 <td><span className="badge badge-gray">{p.sku || '—'}</span></td>
                                                 <td className={p.stock === 0 ? 'stock-out' : p.stock <= p.min_stock ? 'stock-low' : 'stock-ok'}>{p.stock.toLocaleString('vi-VN')} {p.unit}</td>
                                                 <td className="text-muted">{p.min_stock} {p.unit}</td>
-                                                <td>{fmt(p.cost_price)}</td>
-                                                <td className="fw-600">{fmt(p.stock * p.cost_price)}</td>
+                                                {!isEmployee && <td>{fmt(p.cost_price)}</td>}
+                                                {!isEmployee && <td className="fw-600">{fmt(p.stock * p.cost_price)}</td>}
                                                 <td>{p.stock === 0 ? <span className="badge badge-danger">Hết hàng</span> : p.stock <= p.min_stock ? <span className="badge badge-warning">Sắp hết</span> : <span className="badge badge-success">Còn hàng</span>}</td>
                                             </tr>
                                         ))}
@@ -405,7 +406,7 @@ export default function Inventory() {
                         {loading ? <div className="spinner-wrap"><div className="spinner" /></div> : (
                             <div className="table-wrap">
                                 <table>
-                                    <thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th><th>Giá nhập</th><th>Ghi chú</th></tr></thead>
+                                    <thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th>{!isEmployee && <th>Giá nhập</th>}<th>Ghi chú</th></tr></thead>
                                     <tbody>
                                         {logs.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>Không có dữ liệu</td></tr>
                                             : logs.map(l => (
@@ -414,7 +415,7 @@ export default function Inventory() {
                                                     <td className="fw-600">{l.product_name}</td>
                                                     <td><span className={`badge ${logTypes[l.type]?.cls}`}>{logTypes[l.type]?.label}</span></td>
                                                     <td className={l.type === 'export' ? 'text-danger fw-600' : 'text-success fw-600'}>{l.type === 'export' ? '-' : '+'}{Math.abs(l.quantity)}</td>
-                                                    <td>{l.cost_price ? fmt(l.cost_price) : '—'}</td>
+                                                    {!isEmployee && <td>{l.cost_price ? fmt(l.cost_price) : '—'}</td>}
                                                     <td className="text-muted">{l.note || '—'}</td>
                                                 </tr>
                                             ))}

@@ -9,6 +9,20 @@ const { auditLog, diffFields } = require('../utils/audit');
 
 router.use(requireAuth);
 
+// Ensure suggested_price column exists (lazy migration for existing DBs)
+let _suggestedPriceEnsured = false;
+async function ensureSuggestedPrice() {
+    if (_suggestedPriceEnsured) return;
+    try {
+        await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS suggested_price NUMERIC(15,0) NOT NULL DEFAULT 0`);
+        _suggestedPriceEnsured = true;
+    } catch (e) {
+        console.warn('[products] ensureSuggestedPrice:', e.message);
+        _suggestedPriceEnsured = true; // don't retry
+    }
+}
+
+
 // Helper: get branch_id for current user's store (or null for super_admin when no filter)
 async function getUserBranchId(user) {
     if (user.role === 'super_admin') return null; // super_admin sees all
@@ -20,6 +34,7 @@ async function getUserBranchId(user) {
 // GET /api/products — returns products with per-store stock quantity
 router.get('/', async (req, res) => {
     try {
+        await ensureSuggestedPrice();
         const { search, category_id, low_stock } = req.query;
         const branchId = await getUserBranchId(req.user);
         const storeId = req.user.role === 'super_admin' ? null : req.user.store_id;
@@ -156,7 +171,7 @@ router.post('/bulk', requireAdmin, async (req, res) => {
 router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
     const client = await pool.connect();
     try {
-        const { name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description, commission_pct } = req.body;
+        const { name, sku, category_id, cost_price, sell_price, stock, min_stock, unit, description, commission_pct, suggested_price } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Tên sản phẩm là bắt buộc' });
 
         // Determine branch_id
@@ -173,9 +188,9 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 
         await client.query('BEGIN');
         const { rows: [product] } = await client.query(`
-            INSERT INTO products (branch_id, name, sku, category_id, cost_price, sell_price, min_stock, unit, description, image_url, commission_pct)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
-        `, [branchId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0]);
+            INSERT INTO products (branch_id, name, sku, category_id, cost_price, sell_price, min_stock, unit, description, image_url, commission_pct, suggested_price)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+        `, [branchId, name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0, suggested_price || 0]);
 
         // Create store_stock for every store in this branch
         const { rows: branchStores } = await client.query('SELECT id FROM stores WHERE branch_id = $1 AND is_active = TRUE', [branchId]);
@@ -211,7 +226,8 @@ router.post('/', requireAdmin, upload.single('image'), async (req, res) => {
 // PUT /api/products/:id
 router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
     try {
-        const { name, sku, category_id, cost_price, sell_price, min_stock, unit, description, commission_pct } = req.body;
+        await ensureSuggestedPrice();
+        const { name, sku, category_id, cost_price, sell_price, min_stock, unit, description, commission_pct, suggested_price } = req.body;
         let image_url;
         if (req.file) {
             image_url = `/uploads/${req.file.filename}`;
@@ -223,19 +239,21 @@ router.put('/:id', requireAdmin, upload.single('image'), async (req, res) => {
         }
         let query, params;
         if (image_url) {
-            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, image_url=$9, commission_pct=$10 WHERE id=$11 RETURNING *`;
-            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0, req.params.id];
+            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, image_url=$9, commission_pct=$10, suggested_price=$11 WHERE id=$12 RETURNING *`;
+            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, image_url, commission_pct || 0, suggested_price || 0, req.params.id];
         } else {
-            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, commission_pct=$9 WHERE id=$10 RETURNING *`;
-            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, commission_pct || 0, req.params.id];
+            query = `UPDATE products SET name=$1, sku=$2, category_id=$3, cost_price=$4, sell_price=$5, min_stock=$6, unit=$7, description=$8, commission_pct=$9, suggested_price=$10 WHERE id=$11 RETURNING *`;
+            params = [name, sku || null, category_id || null, cost_price || 0, sell_price || 0, min_stock || 5, unit || 'cái', description || null, commission_pct || 0, suggested_price || 0, req.params.id];
         }
         const { rows: [oldProduct] } = await pool.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
         const { rows: [product] } = await pool.query(query, params);
         // Audit log
         const changed = diffFields(oldProduct, product);
-        await auditLog({ action: 'UPDATE', entityType: 'products', entityId: product?.id,
+        await auditLog({
+            action: 'UPDATE', entityType: 'products', entityId: product?.id,
             entityName: product?.name, changedFields: changed,
-            userId: req.user.id, storeId: req.user.store_id });
+            userId: req.user.id, storeId: req.user.store_id
+        });
         res.json({ success: true, data: product });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -245,8 +263,10 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     try {
         const { rows: [old] } = await pool.query('SELECT name FROM products WHERE id = $1', [req.params.id]);
         await pool.query('UPDATE products SET is_active = FALSE WHERE id = $1', [req.params.id]);
-        await auditLog({ action: 'DELETE', entityType: 'products', entityId: parseInt(req.params.id),
-            entityName: old?.name, userId: req.user.id, storeId: req.user.store_id });
+        await auditLog({
+            action: 'DELETE', entityType: 'products', entityId: parseInt(req.params.id),
+            entityName: old?.name, userId: req.user.id, storeId: req.user.store_id
+        });
         res.json({ success: true, message: 'Đã xóa sản phẩm' });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });

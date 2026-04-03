@@ -115,7 +115,11 @@ function AppLayout() {
                 {/* Page content wrapper — handles all padding */}
                 <div className="page-wrapper">
                     <Routes>
-                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/" element={
+                            user && user.role === 'employee'
+                                ? <Navigate to="/ban-hang" replace />
+                                : <Dashboard />
+                        } />
                         <Route path="/ban-hang" element={<Sales />} />
                         <Route path="/don-hang" element={<Orders />} />
                         <Route path="/san-pham" element={<Products />} />

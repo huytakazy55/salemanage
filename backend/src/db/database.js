@@ -214,6 +214,8 @@ async function initSchema() {
       ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
       -- Remove old fixed commission column if exists
       ALTER TABLE salary_config DROP COLUMN IF EXISTS commission_per_item;
+      -- Suggested price (shown to employees, admin only sees cost_price)
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS suggested_price NUMERIC(15,0) NOT NULL DEFAULT 0;
 
       -- ── Extra Expenses (phát sinh) ──────────────────────────────
       CREATE TABLE IF NOT EXISTS extra_expenses (

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { productsApi, ordersApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { ShoppingCart, Search, Minus, Plus, Trash2, CheckCircle, X } from 'lucide-react';
 import { CurrencyInput, Req } from '../utils/formUtils';
@@ -19,17 +20,22 @@ function PosProductImg({ src }) {
 }
 
 /** Popup: nhập giá bán + số lượng khi click sản phẩm */
-function AddToCartPopup({ product, onConfirm, onClose }) {
-    const [price, setPrice] = useState(product.sell_price > 0 ? String(product.sell_price) : '');
-    const [qty, setQty] = useState(1);
+function AddToCartPopup({ product, onConfirm, onClose, isEmployee }) {
     const priceRef = useRef(null);
+
+    // For employees: default to suggested_price; for admin: default to sell_price
+    const defaultPrice = isEmployee
+        ? (product.suggested_price > 0 ? String(product.suggested_price) : '')
+        : (product.sell_price > 0 ? String(product.sell_price) : '');
+    const [price, setPrice] = useState(defaultPrice);
 
     useEffect(() => {
         // Focus vào ô giá bán ngay khi mở
         setTimeout(() => priceRef.current?.select(), 80);
     }, []);
 
-    const profit = (+price - +product.cost_price) * qty;
+    const [qty, setQty] = useState(1);
+    const profit = !isEmployee ? (+price - +product.cost_price) * qty : null;
     const subtotal = +price * qty;
     const maxQty = product.stock;
 
@@ -65,7 +71,12 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{product.name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Vốn: {fmt(product.cost_price)} · Tồn: {product.stock} {product.unit}</div>
+                            {!isEmployee && (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Vốn: {fmt(product.cost_price)} · Tồn: {product.stock} {product.unit}</div>
+                            )}
+                            {isEmployee && (
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Tồn: {product.stock} {product.unit}</div>
+                            )}
                         </div>
                     </div>
 
@@ -82,7 +93,14 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
                             />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>Số lượng</label>
+                            <label className="form-label" style={{ fontWeight: 700, fontSize: 12 }}>
+                                Số lượng
+                                {isEmployee && product.suggested_price > 0 && (
+                                    <span style={{ fontWeight: 400, color: 'var(--primary)', marginLeft: 6 }}>
+                                        (Đề xuất: {fmt(+product.suggested_price)})
+                                    </span>
+                                )}
+                            </label>
                             <div className="cart-qty-control">
                                 <button className="qty-btn" type="button" onClick={() => setQty(q => Math.max(1, q - 1))}><Minus size={13} /></button>
                                 <input
@@ -98,10 +116,15 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
                     </div>
 
                     {/* Live profit preview */}
-                    {+price > 0 && (
+                    {+price > 0 && profit !== null && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12 }}>
                             <span style={{ color: 'var(--text-muted)' }}>Thành tiền: <strong style={{ color: 'var(--primary)' }}>{fmt(subtotal)}</strong></span>
                             <span style={{ color: profit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>Lãi: {fmt(profit)}</span>
+                        </div>
+                    )}
+                    {+price > 0 && profit === null && (
+                        <div style={{ padding: '8px 12px', background: 'var(--bg)', borderRadius: 8, fontSize: 12 }}>
+                            Thành tiền: <strong style={{ color: 'var(--primary)' }}>{fmt(subtotal)}</strong>
                         </div>
                     )}
                 </div>
@@ -117,6 +140,8 @@ function AddToCartPopup({ product, onConfirm, onClose }) {
 }
 
 export default function Sales() {
+    const { user } = useAuth();
+    const isEmployee = user?.role === 'employee';
     const [products, setProducts] = useState([]);
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState('');
@@ -233,7 +258,12 @@ export default function Sales() {
                             <div key={p.id} className={`pos-product-card ${p.stock === 0 ? 'out-of-stock' : ''}`} onClick={() => handleProductClick(p)}>
                                 <PosProductImg src={p.image_url} />
                                 <div className="pos-product-name">{p.name}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Vốn: {fmt(p.cost_price)}</div>
+                                {!isEmployee && (
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Vốn: {fmt(p.cost_price)}</div>
+                                )}
+                                {isEmployee && p.suggested_price > 0 && (
+                                    <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 2, fontWeight: 600 }}>Đề xuất: {fmt(p.suggested_price)}</div>
+                                )}
                                 <div className="pos-product-stock" style={{ marginTop: 4 }}>Còn: {p.stock} {p.unit}</div>
                                 {p.stock <= p.min_stock && p.stock > 0 && (
                                     <div style={{ fontSize: 10, color: 'var(--warning)', marginTop: 2, fontWeight: 600 }}>⚠ Sắp hết</div>
@@ -370,6 +400,7 @@ export default function Sales() {
                     product={popupProduct}
                     onConfirm={handleConfirmAdd}
                     onClose={() => setPopupProduct(null)}
+                    isEmployee={isEmployee}
                 />
             )}
 
@@ -385,7 +416,7 @@ export default function Sales() {
                             </div>
                             <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '14px 20px', textAlign: 'left', marginBottom: 16 }}>
                                 <div className="cart-total-row"><span>Tổng tiền:</span><span className="fw-600">{fmt(successOrder.final_amount)}</span></div>
-                                <div className="cart-total-row" style={{ color: 'var(--success)' }}><span>Lợi nhuận:</span><span className="fw-600">{fmt(successOrder.profit)}</span></div>
+                                {!isEmployee && <div className="cart-total-row" style={{ color: 'var(--success)' }}><span>Lợi nhuận:</span><span className="fw-600">{fmt(successOrder.profit)}</span></div>}
                             </div>
                             <button className="btn btn-primary btn-block" onClick={() => setSuccessOrder(null)}>Đóng</button>
                         </div>
