@@ -21,8 +21,7 @@ export default function Sidebar({ open, onClose }) {
         ...(isAdmin() ? [{
             label: 'Tổng quan',
             items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }],
-            adminOnly: true, // hide from employees
-        },
+        }] : []),
         {
             label: 'Bán hàng',
             items: [
@@ -51,7 +50,7 @@ export default function Sidebar({ open, onClose }) {
                 ] : []),
             ]
         }] : []),
-        ];
+    ];
 
     return (
         <>
