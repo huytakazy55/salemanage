@@ -26,6 +26,7 @@ api.interceptors.response.use(
 
 export const authApi = {
     login: (username, password) => api.post('/auth/login', { username, password }),
+    register: (data) => api.post('/auth/register', data),
     me: () => api.get('/auth/me'),
     changePassword: (current_password, new_password) => api.put('/auth/change-password', { current_password, new_password }),
 };
@@ -45,6 +46,13 @@ export const productsApi = {
     },
     delete: (id) => api.delete(`/products/${id}`),
     bulkImport: (products) => api.post('/products/bulk', { products }),
+};
+
+export const variantsApi = {
+    getAll: (productId) => api.get(`/products/${productId}/variants`),
+    create: (productId, data) => api.post(`/products/${productId}/variants`, data),
+    update: (productId, variantId, data) => api.put(`/products/${productId}/variants/${variantId}`, data),
+    delete: (productId, variantId) => api.delete(`/products/${productId}/variants/${variantId}`),
 };
 
 export const categoriesApi = {
@@ -73,6 +81,7 @@ export const reportsApi = {
     getProfit: (params) => api.get('/reports/profit', { params }),
     getEmployeePerformance: (params) => api.get('/reports/employee-performance', { params }),
     getSalary: (params) => api.get('/reports/salary', { params }),
+    getShift: (params) => api.get('/reports/shift', { params }),
 };
 
 export const salaryConfigApi = {
@@ -113,6 +122,12 @@ export const expensesApi = {
     create: (data) => api.post('/expenses', data),
     update: (id, data) => api.put(`/expenses/${id}`, data),
     delete: (id) => api.delete(`/expenses/${id}`),
+};
+
+export const notificationsApi = {
+    getAll: (params) => api.get('/notifications', { params }),
+    markRead: (id) => api.patch(`/notifications/${id}/read`),
+    markAllRead: () => api.patch('/notifications/read-all'),
 };
 
 export default api;

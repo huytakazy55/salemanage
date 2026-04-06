@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, Package, Warehouse, ShoppingCart,
-    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp, ScrollText
+    ClipboardList, BarChart2, Tag, LogOut, X, Store, Users, TrendingUp, ScrollText, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+
 
 export default function Sidebar({ open, onClose }) {
     const { user, logout, isAdmin, isSuperAdmin } = useAuth();
@@ -19,13 +20,15 @@ export default function Sidebar({ open, onClose }) {
         // Dashboard — chỉ admin trở lên
         ...(isAdmin() ? [{
             label: 'Tổng quan',
-            items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }]
-        }] : []),
+            items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }],
+            adminOnly: true, // hide from employees
+        },
         {
             label: 'Bán hàng',
             items: [
                 { to: '/ban-hang', label: 'Bán hàng (POS)', icon: ShoppingCart },
                 { to: '/don-hang', label: 'Lịch sử đơn hàng', icon: ClipboardList },
+                { to: '/ca-lam-viec', label: 'Tổng kết ca', icon: Clock },
             ]
         },
         {
@@ -48,7 +51,7 @@ export default function Sidebar({ open, onClose }) {
                 ] : []),
             ]
         }] : []),
-    ];
+        ];
 
     return (
         <>
@@ -74,7 +77,7 @@ export default function Sidebar({ open, onClose }) {
                 </div>
 
                 <nav className="sidebar-nav">
-                    {navGroups.map(group => (
+                    {navGroups.filter(g => !g.adminOnly || isAdmin()).map(group => (
                         <div className="nav-group" key={group.label}>
                             <div className="nav-group-label">{group.label}</div>
                             {group.items.map(item => (

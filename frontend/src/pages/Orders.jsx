@@ -7,6 +7,7 @@ import { exportToExcel } from '../utils/exportExcel';
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
 function OrderDetailModal({ orderId, onClose }) {
+    const { isAdmin } = useAuth();
     const [order, setOrder] = useState(null);
     useEffect(() => {
         ordersApi.getById(orderId).then(r => setOrder(r.data));
@@ -50,8 +51,8 @@ function OrderDetailModal({ orderId, onClose }) {
                     <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 13 }}>
                         {order.discount > 0 && <div className="cart-total-row"><span className="text-muted">Giảm giá:</span><span style={{ color: 'var(--danger)' }}>-{fmt(order.discount)}</span></div>}
                         <div className="cart-total-row"><span className="text-muted">Tổng thanh toán:</span><span className="fw-700" style={{ fontSize: 15 }}>{fmt(order.final_amount)}</span></div>
-                        <div className="cart-total-row"><span className="text-muted">Giá vốn:</span><span>{fmt(order.total_cost)}</span></div>
-                        <div className="cart-total-row" style={{ color: 'var(--success)' }}><span>Lợi nhuận:</span><span className="fw-700">{fmt(order.profit)} ({order.final_amount > 0 ? Math.round(order.profit / order.final_amount * 100) : 0}%)</span></div>
+                        {isAdmin() && <div className="cart-total-row"><span className="text-muted">Giá vốn:</span><span>{fmt(order.total_cost)}</span></div>}
+                        {isAdmin() && <div className="cart-total-row" style={{ color: 'var(--success)' }}><span>Lợi nhuận:</span><span className="fw-700">{fmt(order.profit)} ({order.final_amount > 0 ? Math.round(order.profit / order.final_amount * 100) : 0}%)</span></div>}
                     </div>
                 </div>
             </div>
@@ -88,8 +89,8 @@ export default function Orders() {
             'Khách hàng': o.customer_name || 'Khách lẻ',
             'Người bán': o.seller_name || '',
             'Thanh toán': o.payment_method === 'cash' ? 'Tiền mặt' : o.payment_method === 'transfer' ? 'Chuyển khoản' : 'Thẻ',
-            'Doanh thu (đ)': +o.final_amount,
-            'Lợi nhuận (đ)': +o.profit,
+            'Dự doanh thu (đ)': +o.final_amount,
+            ...(isAdmin() ? { 'Lợi nhuận (đ)': +o.profit } : {}),
         }));
         exportToExcel(rows, `don-hang-${from || 'tat-ca'}`, 'Lịch sử đơn hàng');
     };
@@ -121,10 +122,12 @@ export default function Orders() {
                         <div className="text-muted fs-12">Tổng doanh thu</div>
                         <div className="fw-700" style={{ color: 'var(--primary)' }}>{fmt(totalRevenue)}</div>
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: 13 }}>
-                        <div className="text-muted fs-12">Tổng lợi nhuận</div>
-                        <div className="fw-700 text-success">{fmt(totalProfit)}</div>
-                    </div>
+                    {isAdmin() && (
+                        <div style={{ textAlign: 'right', fontSize: 13 }}>
+                            <div className="text-muted fs-12">Tổng lợi nhuận</div>
+                            <div className="fw-700 text-success">{fmt(totalProfit)}</div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -139,7 +142,7 @@ export default function Orders() {
                                     <th>Khách hàng</th>
                                     {isAdmin() && <th>Người bán</th>}
                                     <th>T.Tiền</th>
-                                    <th>Lợi nhuận</th>
+                                    {isAdmin() && <th>Lợi nhuận</th>}
                                     <th>Thanh toán</th>
                                     <th></th>
                                 </tr></thead>
@@ -151,7 +154,7 @@ export default function Orders() {
                                             <td>{o.customer_name || <span className="text-muted">Khách lẻ</span>}</td>
                                             {isAdmin() && <td><strong>{o.seller_name || <span className="text-muted">—</span>}</strong></td>}
                                             <td className="fw-700">{fmt(o.final_amount)}</td>
-                                            <td className="text-success fw-600">{fmt(o.profit)}</td>
+                                            {isAdmin() && <td className="text-success fw-600">{fmt(o.profit)}</td>}
                                             <td>
                                                 <span className="badge badge-gray">
                                                     {o.payment_method === 'cash' ? '💵 TM' : o.payment_method === 'transfer' ? '🏦 CK' : '💳 Thẻ'}

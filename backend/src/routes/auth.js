@@ -41,6 +41,55 @@ router.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// POST /api/auth/register — public, creates store + admin user
+router.post('/register', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { store_name, username, password, full_name } = req.body;
+        if (!store_name || !username || !password || !full_name)
+            return res.status(400).json({ success: false, error: 'Vui lòng điền đầy đủ thông tin' });
+        if (password.length < 6)
+            return res.status(400).json({ success: false, error: 'Mật khẩu phải ít nhất 6 ký tự' });
+
+        const { rows: existing } = await client.query('SELECT id FROM users WHERE username = $1', [username]);
+        if (existing.length > 0)
+            return res.status(400).json({ success: false, error: 'Username đã tồn tại, vui lòng chọn username khác' });
+
+        await client.query('BEGIN');
+
+        // Create branch + store
+        const { rows: [branch] } = await client.query(
+            `INSERT INTO branches (name) VALUES ($1) RETURNING id`, [store_name]
+        );
+        const { rows: [store] } = await client.query(
+            `INSERT INTO stores (name, branch_id, max_employees) VALUES ($1,$2,1) RETURNING *`,
+            [store_name, branch.id]
+        );
+
+        // Create admin user
+        const hash = await bcrypt.hash(password, 10);
+        const { rows: [user] } = await client.query(
+            `INSERT INTO users (username, password_hash, full_name, role, store_id)
+             VALUES ($1,$2,$3,'admin',$4)
+             RETURNING id, username, full_name, role, store_id`,
+            [username, hash, full_name, store.id]
+        );
+
+        await client.query('COMMIT');
+
+        const payload = {
+            id: user.id, username: user.username, full_name: user.full_name,
+            role: user.role, store_id: user.store_id, store_name: store.name,
+        };
+        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+        res.status(201).json({ success: true, token, user: payload });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(400).json({ success: false, error: 'Username đã tồn tại' });
+        res.status(500).json({ success: false, error: err.message });
+    } finally { client.release(); }
+});
+
 // GET /api/auth/me
 router.get('/me', requireAuth, async (req, res) => {
     try {

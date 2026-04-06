@@ -43,10 +43,10 @@ router.post('/', requireAuth, requireSuperAdmin, async (req, res) => {
 // PUT /api/stores/:id — super_admin only
 router.put('/:id', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, address, phone, is_active, branch_id } = req.body;
+        const { name, address, phone, is_active, branch_id, max_employees } = req.body;
         const { rows: [store] } = await pool.query(
-            `UPDATE stores SET name=$1, address=$2, phone=$3, is_active=$4, branch_id=$5 WHERE id=$6 RETURNING *`,
-            [name, address || null, phone || null, is_active !== false, branch_id || null, req.params.id]
+            `UPDATE stores SET name=$1, address=$2, phone=$3, is_active=$4, branch_id=$5, max_employees=COALESCE($6, max_employees) WHERE id=$7 RETURNING *`,
+            [name, address || null, phone || null, is_active !== false, branch_id || null, max_employees != null ? +max_employees : null, req.params.id]
         );
         res.json({ success: true, data: store });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }

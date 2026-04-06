@@ -33,35 +33,181 @@
   --radius-sm: 8px;
   --radius-lg: 16px;
   --sidebar-w: 240px;
-
-  /* transition tốc độ chuyển theme */
-  --theme-transition: background-color .3s ease, color .3s ease, border-color .3s ease, box-shadow .3s ease;
 }
 
-/* ── Dark Mode ──────────────────────────────────────────────── */
+/* ─── Dark mode ─── */
 [data-theme="dark"] {
-  --bg: #0f1117;
-  --bg-card: #1a1d27;
-  --bg-hover: #22263a;
-  --sidebar-bg: #12141f;
-  --sidebar-text: #a0aec0;
-  --sidebar-active: #6366f1;
-  --sidebar-hover: rgba(99, 102, 241, 0.15);
+  --bg: #0f0f17;
+  --bg-card: #1a1a2e;
+  --sidebar-bg: #13131f;
+  --sidebar-hover: rgba(99, 102, 241, 0.18);
 
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
-  --border: #2d3148;
-  --border-light: #1e2235;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3), 0 1px 2px rgba(0, 0, 0, .2);
+  --border: #2d2d45;
+  --border-light: #232338;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3);
   --shadow: 0 4px 16px rgba(0, 0, 0, .4);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, .5);
 
   --primary-light: rgba(99, 102, 241, 0.15);
 }
 
-/* ── Global transition khi đổi theme ── */
+[data-theme="dark"] thead tr {
+  background: #15152a;
+}
+
+[data-theme="dark"] tr:hover td {
+  background: #1e1e35;
+}
+
+[data-theme="dark"] .topbar-date {
+  background: #232338;
+}
+
+/* ─── Theme toggle button ─── */
+.theme-toggle-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 300;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: transform .2s, box-shadow .2s;
+}
+
+.theme-toggle-fab:hover {
+  transform: scale(1.12);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 768px) {
+  .theme-toggle-fab {
+    display: none;
+  }
+}
+
+/* ─── Notification bell ─── */
+/* Desktop FAB: above theme toggle */
+.notif-fab-wrapper {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  z-index: 300;
+}
+
+.notif-fab-wrapper .notif-bell-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 768px) {
+  .notif-fab-wrapper {
+    display: none;
+  }
+}
+
+/* Mobile: inline in topbar */
+.notif-bell-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  transition: background .15s;
+}
+
+.notif-bell-btn:hover {
+  background: var(--border-light);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pulse 2s infinite;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .18);
+  z-index: 5000;
+  overflow: hidden;
+  animation: slideUp .18s ease;
+}
+
+/* On desktop FAB, dropdown opens upward */
+.notif-fab-wrapper .notif-dropdown {
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: 0;
+}
+
+
+
+/* Mobile: inside topbar */
+.theme-toggle-topbar {
+  display: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px;
+  border-radius: 8px;
+  transition: background .15s;
+}
+
+.theme-toggle-topbar:hover {
+  background: var(--border-light);
+}
+
+@media (max-width: 768px) {
+  .theme-toggle-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+
+
 *,
 *::before,
 *::after {
@@ -72,9 +218,22 @@
 }
 
 /* Exception: không transition cho animation/transform */
-.spinner, .toggle-thumb, .icon-sun, .icon-moon { transition: none; }
-.btn { transition: background-color .15s, color .15s, border-color .15s, opacity .15s, transform .1s !important; }
-input, select, textarea { transition: border-color .15s, box-shadow .15s !important; }
+.spinner,
+.toggle-thumb,
+.icon-sun,
+.icon-moon {
+  transition: none;
+}
+
+.btn {
+  transition: background-color .15s, color .15s, border-color .15s, opacity .15s, transform .1s !important;
+}
+
+input,
+select,
+textarea {
+  transition: border-color .15s, box-shadow .15s !important;
+}
 
 body {
   font-family: 'Inter', sans-serif;
@@ -704,7 +863,7 @@ select.form-control {
   left: 50%;
   transform: translateX(-50%);
   font-size: 11px;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255, 255, 255, 0.35);
   pointer-events: none;
   letter-spacing: .3px;
 }
@@ -720,6 +879,12 @@ select.form-control {
   animation: slideUp .2s ease;
   display: flex;
   flex-direction: column;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal::-webkit-scrollbar {
+  display: none;
 }
 
 /* Sticky modal footer — always visible */
@@ -745,6 +910,15 @@ select.form-control {
 
 .modal-body {
   padding: 20px 24px;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
+}
+
+.modal-body::-webkit-scrollbar {
+  display: none;
+  /* Chrome/Safari/Opera */
 }
 
 .modal-footer {
@@ -982,6 +1156,42 @@ select.form-control {
   to {
     transform: translateY(0);
     opacity: 1
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0%;
   }
 }
 

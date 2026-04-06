@@ -9,10 +9,12 @@ function UserModal({ user, stores, currentUser, currentUserRole, onClose, onSave
     const [form, setForm] = useState(
         isEdit
             ? { full_name: user.full_name, role: user.role, store_id: user.store_id || '', is_active: user.is_active, password: '' }
-            : { username: '', password: '', full_name: '', role: 'employee',
+            : {
+                username: '', password: '', full_name: '', role: 'employee',
                 // super_admin: chọn từ dropdown; admin: tự động gán store của mình
                 store_id: currentUserRole === 'super_admin' ? (stores[0]?.id || '') : (currentUser?.store_id || ''),
-                is_active: true }
+                is_active: true
+            }
     );
     const [saving, setSaving] = useState(false);
 
@@ -24,16 +26,15 @@ function UserModal({ user, stores, currentUser, currentUserRole, onClose, onSave
         e.preventDefault();
         if (!isEdit && (!form.username || !form.password)) return toast.error('Username và mật khẩu là bắt buộc');
         if (!isEdit && !form.full_name) return toast.error('Họ tên là bắt buộc');
-
-        // Admin (không phải super_admin) luôn dùng store của mình
-        const effectiveStoreId = roleNeedsStore
-            ? (currentUserRole !== 'super_admin' ? currentUser?.store_id : form.store_id)
-            : null;
-
-        if (roleNeedsStore && !effectiveStoreId) return toast.error('Vui lòng chọn cửa hàng');
+        // Only require store selection when super_admin can pick a store
+        if (showStorePicker && !form.store_id) return toast.error('Vui lòng chọn cửa hàng');
         setSaving(true);
         try {
-            const data = { ...form, store_id: effectiveStoreId };
+            const data = {
+                ...form,
+                // super_admin picks store; admin auto-assigns their own store (backend handles it)
+                store_id: showStorePicker ? form.store_id : undefined,
+            };
             if (isEdit) await usersApi.update(user.id, data);
             else await usersApi.create(data);
             toast.success(isEdit ? 'Đã cập nhật!' : 'Đã tạo tài khoản!');
@@ -137,6 +138,7 @@ export default function UsersPage() {
     const [stores, setStores] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState(null);
+    const [quota, setQuota] = useState(null); // { used, max } — admin only
 
     const load = useCallback(() => {
         setLoading(true);
@@ -146,6 +148,7 @@ export default function UsersPage() {
         ]).then(([u, s]) => {
             setUsers(u.data || []);
             setStores(s.data || []);
+            if (u.quota) setQuota(u.quota);
         }).finally(() => setLoading(false));
     }, [isSuperAdmin]);
 
@@ -168,6 +171,36 @@ export default function UsersPage() {
                     <Plus size={14} /> Thêm người dùng
                 </button>
             </div>
+
+            {/* Quota bar — visible to admin only */}
+            {quota && !isSuperAdmin() && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px',
+                    background: quota.used >= quota.max ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.06)',
+                    border: `1px solid ${quota.used >= quota.max ? 'rgba(239,68,68,0.25)' : 'rgba(99,102,241,0.18)'}`,
+                    borderRadius: 12, marginBottom: 16,
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                            {quota.used >= quota.max
+                                ? '🔒 Đã đạt giới hạn nhân viên'
+                                : `👥 Nhân viên: ${quota.used}/${quota.max}`}
+                        </div>
+                        <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{
+                                height: '100%', borderRadius: 3, transition: 'width .3s',
+                                background: quota.used >= quota.max ? '#ef4444' : 'var(--primary)',
+                                width: `${Math.min(100, (quota.used / quota.max) * 100)}%`,
+                            }} />
+                        </div>
+                    </div>
+                    {quota.used >= quota.max && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
+                            Liên hệ admin<br />để nâng cấp gói
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="card">
                 {loading ? <div className="spinner-wrap"><div className="spinner" /></div> :

@@ -11,19 +11,28 @@ const monthStart = () => today().slice(0, 7) + '-01';
 
 // ─── Import Hàng Modal ───────────────────────────────────────────
 function ImportModal({ products, onClose, onSaved }) {
-    const [form, setForm] = useState({ product_id: '', quantity: '', cost_price: '', note: '' });
+    const [form, setForm] = useState({ product_id: '', quantity: '', cost_price: '', total_amount: '', note: '' });
+    const [priceMode, setPriceMode] = useState('unit'); // 'unit' | 'total'
     const [saving, setSaving] = useState(false);
     const selected = products.find(p => p.id === +form.product_id);
+
+    // Auto-compute unit price when in total mode
+    const computedUnitPrice = priceMode === 'total' && form.total_amount && form.quantity
+        ? Math.round(+form.total_amount / +form.quantity)
+        : null;
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.product_id || !form.quantity) return toast.error('Vui lòng chọn sản phẩm và số lượng');
+        const finalCostPrice = priceMode === 'total' ? computedUnitPrice : (form.cost_price ? +form.cost_price : undefined);
         setSaving(true);
         try {
-            await inventoryApi.import({ product_id: +form.product_id, quantity: +form.quantity, cost_price: form.cost_price ? +form.cost_price : undefined, note: form.note });
+            await inventoryApi.import({ product_id: +form.product_id, quantity: +form.quantity, cost_price: finalCostPrice, note: form.note });
             toast.success('Nhập kho thành công!'); onSaved();
         } catch (err) { toast.error(err.error || 'Có lỗi xảy ra'); }
         finally { setSaving(false); }
     };
+
     return (
         <div className="modal-overlay" onDoubleClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()}>
@@ -37,11 +46,64 @@ function ImportModal({ products, onClose, onSaved }) {
                                 {products.map(p => <option key={p.id} value={p.id}>{p.name} (còn {p.stock} {p.unit})</option>)}
                             </select>
                         </div>
-                        {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn hiện tại: <strong>{selected.stock} {selected.unit}</strong> | Giá vốn: <strong>{fmt(selected.cost_price)}</strong></div>}
-                        <div className="form-row">
-                            <div className="form-group"><label className="form-label">Số lượng <span className="req-star">*</span></label><input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required /></div>
-                            <div className="form-group"><label className="form-label">Giá nhập mới</label><input type="number" className="form-control" value={form.cost_price} onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))} placeholder={selected?.cost_price || '0'} min="0" /></div>
+                        {selected && <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>Tồn hiện tại: <strong>{selected.stock} {selected.unit}</strong> | Giá vốn hiện tại: <strong>{fmt(selected.cost_price)}</strong></div>}
+
+                        <div className="form-group">
+                            <label className="form-label">Số lượng nhập <span className="req-star">*</span></label>
+                            <input type="number" className="form-control" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} min="1" required placeholder="0" />
                         </div>
+
+                        {/* Price mode toggle */}
+                        <div className="form-group">
+                            <label className="form-label">Cách nhập giá vốn</label>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${priceMode === 'unit' ? 'btn-primary' : 'btn-outline'}`}
+                                    onClick={() => setPriceMode('unit')}
+                                    style={{ flex: 1 }}
+                                >
+                                    💰 Giá 1 sản phẩm
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-sm ${priceMode === 'total' ? 'btn-primary' : 'btn-outline'}`}
+                                    onClick={() => setPriceMode('total')}
+                                    style={{ flex: 1 }}
+                                >
+                                    🧾 Tổng tiền hàng
+                                </button>
+                            </div>
+
+                            {priceMode === 'unit' ? (
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    value={form.cost_price}
+                                    onChange={e => setForm(f => ({ ...f, cost_price: e.target.value }))}
+                                    placeholder={selected?.cost_price ? `Hiện tại: ${Number(selected.cost_price).toLocaleString('vi-VN')}` : 'Giá mỗi sản phẩm...'}
+                                    min="0"
+                                />
+                            ) : (
+                                <>
+                                    <input
+                                        type="number"
+                                        className="form-control"
+                                        value={form.total_amount}
+                                        onChange={e => setForm(f => ({ ...f, total_amount: e.target.value }))}
+                                        placeholder="Tổng tiền đã trả (kể cả ship, phí...)..."
+                                        min="0"
+                                    />
+                                    {computedUnitPrice !== null && (
+                                        <div style={{ marginTop: 8, padding: '7px 12px', background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#2563eb', fontWeight: 600 }}>
+                                            📌 Giá vốn mỗi {selected?.unit || 'sản phẩm'}: <strong>{computedUnitPrice.toLocaleString('vi-VN')}đ</strong>
+                                            <span style={{ fontWeight: 400, color: '#64748b', marginLeft: 8 }}>({fmt(form.total_amount)} ÷ {form.quantity})</span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
                         <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-control" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Nhập từ NCC XYZ..." /></div>
                         {form.quantity && selected && <div style={{ padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>Sau nhập: {+selected.stock + +form.quantity} {selected.unit}</div>}
                     </div>
@@ -186,6 +248,7 @@ function TransferModal({ products, onClose, onSaved }) {
 // ─── Main Component ───────────────────────────────────────────────
 export default function Inventory() {
     const { isAdmin } = useAuth();
+    const isEmployee = !isAdmin();
     const [products, setProducts] = useState([]);
     const [logs, setLogs] = useState([]);
     const [transferLogs, setTransferLogs] = useState([]);
@@ -303,7 +366,7 @@ export default function Inventory() {
                         {loading ? <div className="spinner-wrap"><div className="spinner" /></div> : (
                             <div className="table-wrap">
                                 <table>
-                                    <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Tồn kho</th><th>Tối thiểu</th><th>Giá vốn</th><th>Giá trị tồn</th><th>Tình trạng</th></tr></thead>
+                                    <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Tồn kho</th><th>Tối thiểu</th>{!isEmployee && <th>Giá vốn</th>}{!isEmployee && <th>Giá trị tồn</th>}<th>Tình trạng</th></tr></thead>
                                     <tbody>
                                         {displayed.map(p => (
                                             <tr key={p.id} style={p.stock === 0 ? { background: '#fff7f7' } : p.stock <= p.min_stock ? { background: '#fffbeb' } : {}}>
@@ -311,8 +374,8 @@ export default function Inventory() {
                                                 <td><span className="badge badge-gray">{p.sku || '—'}</span></td>
                                                 <td className={p.stock === 0 ? 'stock-out' : p.stock <= p.min_stock ? 'stock-low' : 'stock-ok'}>{p.stock.toLocaleString('vi-VN')} {p.unit}</td>
                                                 <td className="text-muted">{p.min_stock} {p.unit}</td>
-                                                <td>{fmt(p.cost_price)}</td>
-                                                <td className="fw-600">{fmt(p.stock * p.cost_price)}</td>
+                                                {!isEmployee && <td>{fmt(p.cost_price)}</td>}
+                                                {!isEmployee && <td className="fw-600">{fmt(p.stock * p.cost_price)}</td>}
                                                 <td>{p.stock === 0 ? <span className="badge badge-danger">Hết hàng</span> : p.stock <= p.min_stock ? <span className="badge badge-warning">Sắp hết</span> : <span className="badge badge-success">Còn hàng</span>}</td>
                                             </tr>
                                         ))}
@@ -343,7 +406,7 @@ export default function Inventory() {
                         {loading ? <div className="spinner-wrap"><div className="spinner" /></div> : (
                             <div className="table-wrap">
                                 <table>
-                                    <thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th><th>Giá nhập</th><th>Ghi chú</th></tr></thead>
+                                    <thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th>{!isEmployee && <th>Giá nhập</th>}<th>Ghi chú</th></tr></thead>
                                     <tbody>
                                         {logs.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>Không có dữ liệu</td></tr>
                                             : logs.map(l => (
@@ -352,7 +415,7 @@ export default function Inventory() {
                                                     <td className="fw-600">{l.product_name}</td>
                                                     <td><span className={`badge ${logTypes[l.type]?.cls}`}>{logTypes[l.type]?.label}</span></td>
                                                     <td className={l.type === 'export' ? 'text-danger fw-600' : 'text-success fw-600'}>{l.type === 'export' ? '-' : '+'}{Math.abs(l.quantity)}</td>
-                                                    <td>{l.cost_price ? fmt(l.cost_price) : '—'}</td>
+                                                    {!isEmployee && <td>{l.cost_price ? fmt(l.cost_price) : '—'}</td>}
                                                     <td className="text-muted">{l.note || '—'}</td>
                                                 </tr>
                                             ))}

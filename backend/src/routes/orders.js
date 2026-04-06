@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const eventBus = require('../utils/eventBus');
 
 router.use(requireAuth);
 
@@ -80,22 +81,38 @@ router.post('/', async (req, res) => {
             );
             if (!product) throw new Error(`Sản phẩm ID ${item.product_id} không tồn tại`);
 
-            // Get stock from store_stock
-            const { rows: [ss] } = await client.query(
-                'SELECT quantity FROM store_stock WHERE product_id = $1 AND store_id = $2',
-                [item.product_id, storeId]
-            );
-            const currentStock = ss?.quantity || 0;
-            if (currentStock < item.quantity) throw new Error(`Sản phẩm "${product.name}" không đủ tồn kho (còn ${currentStock})`);
+            // Get stock — variant-level or product-level
+            let currentStock, variantCostPrice;
+            if (item.variant_id) {
+                const { rows: [vs] } = await client.query(
+                    'SELECT quantity FROM store_stock WHERE variant_id = $1 AND store_id = $2',
+                    [item.variant_id, storeId]
+                );
+                currentStock = vs?.quantity || 0;
+                const { rows: [vr] } = await client.query(
+                    'SELECT cost_price FROM product_variants WHERE id = $1', [item.variant_id]
+                );
+                variantCostPrice = +vr?.cost_price > 0 ? +vr.cost_price : +product.cost_price;
+            } else {
+                const { rows: [ss] } = await client.query(
+                    'SELECT quantity FROM store_stock WHERE product_id = $1 AND store_id = $2 AND variant_id IS NULL',
+                    [item.product_id, storeId]
+                );
+                currentStock = ss?.quantity || 0;
+                variantCostPrice = +product.cost_price;
+            }
+
+            const label = item.variant_id ? `"${product.name}" (${item.variant_name || 'phân loại'})` : `"${product.name}"`;
+            if (currentStock < item.quantity) throw new Error(`Sản phẩm ${label} không đủ tồn kho (còn ${currentStock})`);
 
             const sellPrice = item.sell_price && +item.sell_price > 0 ? +item.sell_price : +product.sell_price;
-            if (!sellPrice || sellPrice <= 0) throw new Error(`Vui lòng nhập giá bán cho "${product.name}"`);
+            if (!sellPrice || sellPrice <= 0) throw new Error(`Vui lòng nhập giá bán cho ${label}`);
 
             const subtotal = sellPrice * item.quantity;
-            const costTotal = +product.cost_price * item.quantity;
+            const costTotal = variantCostPrice * item.quantity;
             totalAmount += subtotal;
             totalCost += costTotal;
-            resolvedItems.push({ ...item, product, subtotal, costTotal, sell_price: sellPrice, cost_price: +product.cost_price });
+            resolvedItems.push({ ...item, product, subtotal, costTotal, sell_price: sellPrice, cost_price: variantCostPrice });
         }
 
         const finalAmount = totalAmount - discount;
@@ -109,15 +126,22 @@ router.post('/', async (req, res) => {
 
         for (const item of resolvedItems) {
             await client.query(`
-                INSERT INTO order_items (order_id, product_id, product_name, quantity, cost_price, sell_price, subtotal, profit)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-            `, [order.id, item.product_id, item.product.name, item.quantity, item.cost_price, item.sell_price, item.subtotal, item.subtotal - item.costTotal]);
+                INSERT INTO order_items (order_id, product_id, product_name, quantity, cost_price, sell_price, subtotal, profit, variant_id, variant_name)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            `, [order.id, item.product_id, item.product.name, item.quantity, item.cost_price, item.sell_price, item.subtotal, item.subtotal - item.costTotal, item.variant_id || null, item.variant_name || null]);
 
-            // Decrement store_stock instead of products.stock
-            await client.query(
-                'UPDATE store_stock SET quantity = quantity - $1 WHERE product_id = $2 AND store_id = $3',
-                [item.quantity, item.product_id, storeId]
-            );
+            // Decrement variant stock or product stock
+            if (item.variant_id) {
+                await client.query(
+                    'UPDATE store_stock SET quantity = quantity - $1 WHERE variant_id = $2 AND store_id = $3',
+                    [item.quantity, item.variant_id, storeId]
+                );
+            } else {
+                await client.query(
+                    'UPDATE store_stock SET quantity = quantity - $1 WHERE product_id = $2 AND store_id = $3 AND variant_id IS NULL',
+                    [item.quantity, item.product_id, storeId]
+                );
+            }
             await client.query(
                 `INSERT INTO inventory_logs (product_id, store_id, type, quantity, note) VALUES ($1,$2,'export',$3,$4)`,
                 [item.product_id, storeId, item.quantity, `Bán hàng đơn ${orderCode}`]
@@ -125,6 +149,23 @@ router.post('/', async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Create notification for store admin
+        if (storeId) {
+            try {
+                const itemSummary = resolvedItems.slice(0, 2)
+                    .map(i => `${i.product.name} x${i.quantity}`)
+                    .join(', ') + (resolvedItems.length > 2 ? ` +${resolvedItems.length - 2} sp khác` : '');
+                const body = `👤 ${req.user.full_name} | 📦 ${itemSummary} | 💰 ${finalAmount.toLocaleString('vi-VN')}đ`;
+                const { rows: [notif] } = await pool.query(
+                    `INSERT INTO notifications (store_id, type, title, body, order_id) VALUES ($1,'new_order',$2,$3,$4) RETURNING *`,
+                    [storeId, `🛒 Đơn hàng mới #${orderCode}`, body, order.id]
+                );
+                // Push real-time to SSE subscribers of this store
+                eventBus.emit(`store:${storeId}`, notif);
+            } catch (_) { /* non-blocking */ }
+        }
+
         res.status(201).json({ success: true, data: order, message: 'Tạo đơn hàng thành công' });
     } catch (err) {
         await client.query('ROLLBACK');

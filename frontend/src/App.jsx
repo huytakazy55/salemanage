@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Menu, LayoutDashboard, ShoppingCart, ClipboardList, Warehouse, MoreHorizontal } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-import ThemeToggle from './components/ThemeToggle';
+import { useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
+import NotificationBell from './components/NotificationBell';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -18,6 +18,8 @@ import UsersPage from './pages/Users';
 import StoresPage from './pages/Stores';
 import EmployeeReport from './pages/EmployeeReport';
 import AuditLogs from './pages/AuditLogs';
+import ShiftReport from './pages/ShiftReport';
+import Register from './pages/Register';
 
 function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
     const { isAdmin, isSuperAdmin } = useAuth();
@@ -66,6 +68,7 @@ function MobileBottomNav({ onOpenSidebar }) {
 
 function AppLayout() {
     const { user, loading } = useAuth();
+    const { dark, toggle } = useTheme();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     if (loading) return (
@@ -90,15 +93,45 @@ function AppLayout() {
                         <Menu size={20} />
                     </button>
                     <span className="mobile-topbar-title">📊 SaleManage</span>
-                    <div style={{ width: 36 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <NotificationBell />
+                        <button
+                            className="theme-toggle-topbar"
+                            onClick={toggle}
+                            aria-label="Chuyển chế độ sáng/tối"
+                            title={dark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
+                        >
+                            {dark ? '☀️' : '🌙'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Desktop floating theme toggle — bottom right */}
+                <button
+                    className="theme-toggle-fab"
+                    onClick={toggle}
+                    aria-label="Chuyển chế độ sáng/tối"
+                    title={dark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
+                >
+                    {dark ? '☀️' : '🌙'}
+                </button>
+
+                {/* Desktop notification bell FAB — above theme toggle */}
+                <div className="notif-fab-wrapper">
+                    <NotificationBell />
                 </div>
 
                 {/* Page content wrapper — handles all padding */}
                 <div className="page-wrapper">
                     <Routes>
-                        <Route path="/" element={<EmployeeGuard />} />
+                        <Route path="/" element={
+                            user && user.role === 'employee'
+                                ? <Navigate to="/ban-hang" replace />
+                                : <Dashboard />
+                        } />
                         <Route path="/ban-hang" element={<Sales />} />
                         <Route path="/don-hang" element={<Orders />} />
+                        <Route path="/ca-lam-viec" element={<ShiftReport />} />
                         <Route path="/san-pham" element={<Products />} />
                         <Route path="/kho-hang" element={<Inventory />} />
                         <Route path="/danh-muc" element={<PrivateRoute adminOnly><Categories /></PrivateRoute>} />
@@ -123,17 +156,16 @@ function AppLayout() {
 
 export default function App() {
     return (
-        <ThemeProvider>
-            <AuthProvider>
-                <BrowserRouter>
-                    <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-                    <Routes>
-                        <Route path="/login" element={<LoginGuard />} />
-                        <Route path="/*" element={<AppLayout />} />
-                    </Routes>
-                </BrowserRouter>
-            </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+            <BrowserRouter>
+                <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
+                <Routes>
+                    <Route path="/login" element={<LoginGuard />} />
+                    <Route path="/dang-ky" element={<RegisterGuard />} />
+                    <Route path="/*" element={<AppLayout />} />
+                </Routes>
+            </BrowserRouter>
+        </AuthProvider>
     );
 }
 
@@ -142,4 +174,11 @@ function LoginGuard() {
     if (loading) return null;
     if (user) return <Navigate to="/" replace />;
     return <Login />;
+}
+
+function RegisterGuard() {
+    const { user, loading } = useAuth();
+    if (loading) return null;
+    if (user) return <Navigate to="/" replace />;
+    return <Register />;
 }
