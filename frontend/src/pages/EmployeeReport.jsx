@@ -27,7 +27,10 @@ export default function EmployeeReport() {
         const apiCall = tab === 'salary'
             ? reportsApi.getSalary(params)
             : reportsApi.getEmployeePerformance(params);
-        apiCall.then(r => setData(r.data || [])).finally(() => setLoading(false));
+        apiCall
+            .then(r => setData(r.data || []))
+            .catch(() => toast.error('Không tải được dữ liệu'))
+            .finally(() => setLoading(false));
     }, [tab, from, to]);
 
     useEffect(() => { load(); }, [load]);

@@ -52,6 +52,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative; /* needed so icon-sun/moon absolute positioning is anchored here */
     transition: transform .4s cubic-bezier(.34,1.56,.64,1), background .4s;
 }
 
