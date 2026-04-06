@@ -3,6 +3,7 @@ import { reportsApi, salaryConfigApi } from '../services/api';
 import { Users, TrendingUp, DollarSign, Save, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { exportToExcel } from '../utils/exportExcel';
+import { CurrencyInput } from '../utils/formUtils';
 
 function fmt(n) { return Number(n || 0).toLocaleString('vi-VN') + 'đ'; }
 
@@ -111,29 +112,31 @@ export default function EmployeeReport() {
 
             {/* Salary config (shown in salary tab) */}
             {tab === 'salary' && (
-                <div className="card" style={{ marginBottom: 16 }}>
-                    <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <DollarSign size={16} />
-                        <strong>Lương cơ bản</strong>
+                <div className="card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                        <DollarSign size={16} style={{ color: 'var(--primary)' }} />
+                        <strong style={{ fontSize: 14 }}>Cấu hình lương cơ bản</strong>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '0 0 4px' }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: 200 }}>
-                            <label className="form-label">Lương cơ bản (đ/tháng)</label>
-                            <input
-                                type="number"
-                                className="form-control"
-                                placeholder="VD: 3000000"
+                            <label className="form-label" style={{ marginBottom: 6 }}>Lương cơ bản (đ/tháng)</label>
+                            <CurrencyInput
+                                className="form-control input-currency"
+                                placeholder="VD: 3.000.000"
                                 value={baseSalary}
-                                onChange={e => setBaseSalary(e.target.value)}
+                                onChange={v => setBaseSalary(v)}
                             />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                            <button className="btn btn-primary" onClick={saveConfig} disabled={configSaving}>
-                                <Save size={14} /> {configSaving ? 'Đang lưu...' : 'Lưu'}
-                            </button>
-                        </div>
+                        <button
+                            className="btn btn-primary"
+                            style={{ height: 40, minWidth: 90, flexShrink: 0 }}
+                            onClick={saveConfig}
+                            disabled={configSaving}
+                        >
+                            <Save size={14} /> {configSaving ? 'Đang lưu...' : 'Lưu'}
+                        </button>
                     </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.8 }}>
                         💡 <strong>Công thức:</strong> Lương = Lương cơ bản + Σ (Doanh thu SP × % Hoa hồng SP)<br />
                         <span style={{ opacity: 0.75 }}>% Hoa hồng từng sản phẩm được cấu hình trong trang <strong>Sản phẩm</strong></span>
                     </p>

@@ -1,15 +1,18 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { usersApi, storesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Plus, Edit2, Trash2, X, Users, Shield, User, Store } from 'lucide-react';
 
-function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
+function UserModal({ user, stores, currentUser, currentUserRole, onClose, onSaved }) {
     const isEdit = !!user;
     const [form, setForm] = useState(
         isEdit
             ? { full_name: user.full_name, role: user.role, store_id: user.store_id || '', is_active: user.is_active, password: '' }
-            : { username: '', password: '', full_name: '', role: 'employee', store_id: stores[0]?.id || '', is_active: true }
+            : { username: '', password: '', full_name: '', role: 'employee',
+                // super_admin: chọn từ dropdown; admin: tự động gán store của mình
+                store_id: currentUserRole === 'super_admin' ? (stores[0]?.id || '') : (currentUser?.store_id || ''),
+                is_active: true }
     );
     const [saving, setSaving] = useState(false);
 
@@ -21,10 +24,16 @@ function UserModal({ user, stores, currentUserRole, onClose, onSaved }) {
         e.preventDefault();
         if (!isEdit && (!form.username || !form.password)) return toast.error('Username và mật khẩu là bắt buộc');
         if (!isEdit && !form.full_name) return toast.error('Họ tên là bắt buộc');
-        if (roleNeedsStore && !form.store_id) return toast.error('Vui lòng chọn cửa hàng');
+
+        // Admin (không phải super_admin) luôn dùng store của mình
+        const effectiveStoreId = roleNeedsStore
+            ? (currentUserRole !== 'super_admin' ? currentUser?.store_id : form.store_id)
+            : null;
+
+        if (roleNeedsStore && !effectiveStoreId) return toast.error('Vui lòng chọn cửa hàng');
         setSaving(true);
         try {
-            const data = { ...form, store_id: roleNeedsStore ? form.store_id : null };
+            const data = { ...form, store_id: effectiveStoreId };
             if (isEdit) await usersApi.update(user.id, data);
             else await usersApi.create(data);
             toast.success(isEdit ? 'Đã cập nhật!' : 'Đã tạo tài khoản!');
@@ -217,6 +226,7 @@ export default function UsersPage() {
                 <UserModal
                     user={modal === 'add' ? null : modal}
                     stores={stores}
+                    currentUser={currentUser}
                     currentUserRole={currentUser?.role}
                     onClose={() => setModal(null)}
                     onSaved={() => { setModal(null); load(); }}

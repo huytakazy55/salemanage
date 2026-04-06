@@ -1,0 +1,109 @@
+/* ── Theme Toggle Button ─────────────────────────────────── */
+.theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 999;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,.25));
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1), filter .2s;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.12) rotate(12deg);
+    filter: drop-shadow(0 6px 18px rgba(0,0,0,.35));
+}
+
+.theme-toggle:active {
+    transform: scale(.95);
+}
+
+/* ── Track (pill) ── */
+.toggle-track {
+    width: 56px;
+    height: 30px;
+    border-radius: 999px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    transition: background .4s cubic-bezier(.4,0,.2,1);
+}
+
+.theme-toggle.light .toggle-track {
+    background: linear-gradient(135deg, #87ceeb 0%, #fbbf24 100%);
+    justify-content: flex-start;
+}
+
+.theme-toggle.dark .toggle-track {
+    background: linear-gradient(135deg, #1e1e2e 0%, #6366f1 100%);
+    justify-content: flex-end;
+}
+
+/* ── Thumb ── */
+.toggle-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .4s cubic-bezier(.34,1.56,.64,1), background .4s;
+}
+
+.theme-toggle.light .toggle-thumb {
+    background: #fff;
+}
+
+.theme-toggle.dark .toggle-thumb {
+    background: #312e81;
+}
+
+/* ── Sun / Moon icons ── */
+.icon-sun,
+.icon-moon {
+    width: 14px;
+    height: 14px;
+    position: absolute;
+    transition: opacity .3s, transform .4s cubic-bezier(.34,1.56,.64,1);
+}
+
+.icon-sun { color: #f59e0b; }
+.icon-moon { color: #c4b5fd; }
+
+/* Light mode: show sun, hide moon */
+.theme-toggle.light .icon-sun {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+.theme-toggle.light .icon-moon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.4);
+}
+
+/* Dark mode: show moon, hide sun */
+.theme-toggle.dark .icon-sun {
+    opacity: 0;
+    transform: rotate(90deg) scale(0.4);
+}
+.theme-toggle.dark .icon-moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+/* ── Glow animation khi hover ── */
+@keyframes glow-sun {
+    0%, 100% { filter: drop-shadow(0 0 4px #fbbf24); }
+    50% { filter: drop-shadow(0 0 10px #f59e0b); }
+}
+@keyframes glow-moon {
+    0%, 100% { filter: drop-shadow(0 0 4px #818cf8); }
+    50% { filter: drop-shadow(0 0 10px #6366f1); }
+}
+
+.theme-toggle.light:hover .icon-sun { animation: glow-sun .8s ease infinite; }
+.theme-toggle.dark:hover .icon-moon { animation: glow-moon .8s ease infinite; }

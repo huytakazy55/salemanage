@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Menu, LayoutDashboard, ShoppingCart, ClipboardList, Warehouse, MoreHorizontal } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import ThemeToggle from './components/ThemeToggle';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -22,6 +24,13 @@ function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
     if (superAdminOnly && !isSuperAdmin()) return <Navigate to="/" replace />;
     if (adminOnly && !isAdmin()) return <Navigate to="/" replace />;
     return children;
+}
+
+// Redirect nhân viên khỏi Dashboard → trang bán hàng
+function EmployeeGuard() {
+    const { isAdmin } = useAuth();
+    if (!isAdmin()) return <Navigate to="/ban-hang" replace />;
+    return <Dashboard />;
 }
 
 // Mobile bottom navigation
@@ -87,7 +96,7 @@ function AppLayout() {
                 {/* Page content wrapper — handles all padding */}
                 <div className="page-wrapper">
                     <Routes>
-                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/" element={<EmployeeGuard />} />
                         <Route path="/ban-hang" element={<Sales />} />
                         <Route path="/don-hang" element={<Orders />} />
                         <Route path="/san-pham" element={<Products />} />
@@ -105,21 +114,26 @@ function AppLayout() {
 
             {/* Bottom nav — always fixed at bottom on mobile */}
             <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />
+
+            {/* Theme toggle — bottom left, always visible */}
+            <ThemeToggle />
         </div>
     );
 }
 
 export default function App() {
     return (
-        <AuthProvider>
-            <BrowserRouter>
-                <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-                <Routes>
-                    <Route path="/login" element={<LoginGuard />} />
-                    <Route path="/*" element={<AppLayout />} />
-                </Routes>
-            </BrowserRouter>
-        </AuthProvider>
+        <ThemeProvider>
+            <AuthProvider>
+                <BrowserRouter>
+                    <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
+                    <Routes>
+                        <Route path="/login" element={<LoginGuard />} />
+                        <Route path="/*" element={<AppLayout />} />
+                    </Routes>
+                </BrowserRouter>
+            </AuthProvider>
+        </ThemeProvider>
     );
 }
 

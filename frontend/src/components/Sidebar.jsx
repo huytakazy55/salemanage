@@ -16,10 +16,11 @@ export default function Sidebar({ open, onClose }) {
     };
 
     const navGroups = [
-        {
+        // Dashboard — chỉ admin trở lên
+        ...(isAdmin() ? [{
             label: 'Tổng quan',
             items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard }]
-        },
+        }] : []),
         {
             label: 'Bán hàng',
             items: [
