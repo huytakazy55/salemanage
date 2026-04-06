@@ -62,8 +62,39 @@ router.get('/', async (req, res) => {
         if (low_stock === 'true') query += ` AND COALESCE(ss.quantity, 0) <= p.min_stock`;
         query += ` ORDER BY p.name`;
 
-        const { rows } = await pool.query(query, params);
-        res.json({ success: true, data: rows });
+        const { rows: products } = await pool.query(query, params);
+
+        // Attach variants to each product
+        if (products.length > 0) {
+            const productIds = products.map(p => p.id);
+            const { rows: variants } = await pool.query(
+                `SELECT pv.*, COALESCE(ss.quantity, 0) as stock
+                 FROM product_variants pv
+                 LEFT JOIN store_stock ss ON ss.variant_id = pv.id AND ss.store_id = $1
+                 WHERE pv.product_id = ANY($2) AND pv.is_active = TRUE
+                 ORDER BY pv.created_at ASC`,
+                [storeId, productIds]
+            );
+            const variantMap = {};
+            variants.forEach(v => {
+                if (!variantMap[v.product_id]) variantMap[v.product_id] = [];
+                variantMap[v.product_id].push(v);
+            });
+            const data = products.map(p => ({
+                ...p,
+                variants: variantMap[p.id] || [],
+                has_variants: (variantMap[p.id] || []).length > 0,
+            }));
+
+            // RBAC: strip cost_price for employees
+            const isEmployee = req.user.role === 'employee';
+            const sanitized = isEmployee ? data.map(p => ({ ...p, cost_price: null, variants: p.variants.map(v => ({ ...v, cost_price: null })) })) : data;
+            return res.json({ success: true, data: sanitized });
+        }
+
+        const isEmployee = req.user.role === 'employee';
+        const data = isEmployee ? products.map(p => ({ ...p, cost_price: null })) : products;
+        res.json({ success: true, data });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
@@ -268,6 +299,91 @@ router.delete('/:id', requireAdmin, async (req, res) => {
             entityName: old?.name, userId: req.user.id, storeId: req.user.store_id
         });
         res.json({ success: true, message: 'Đã xóa sản phẩm' });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// ─── Product Variants CRUD ──────────────────────────────────────────────────
+
+// GET /api/products/:id/variants
+router.get('/:id/variants', async (req, res) => {
+    try {
+        const storeId = req.user.role === 'super_admin' ? null : req.user.store_id;
+        const { rows } = await pool.query(
+            `SELECT pv.*, COALESCE(ss.quantity, 0) as stock
+             FROM product_variants pv
+             LEFT JOIN store_stock ss ON ss.variant_id = pv.id AND ss.store_id = $1
+             WHERE pv.product_id = $2 AND pv.is_active = TRUE
+             ORDER BY pv.created_at ASC`,
+            [storeId, req.params.id]
+        );
+        res.json({ success: true, data: rows });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// POST /api/products/:id/variants
+router.post('/:id/variants', requireAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { name, sku, cost_price, suggested_price } = req.body;
+        if (!name) return res.status(400).json({ success: false, error: 'Tên phân loại là bắt buộc' });
+        const productId = req.params.id;
+
+        // Get all stores in this product's branch to init stock rows
+        const { rows: [product] } = await client.query('SELECT branch_id FROM products WHERE id = $1', [productId]);
+        const { rows: branchStores } = await client.query(
+            'SELECT id FROM stores WHERE branch_id = $1 AND is_active = TRUE',
+            [product?.branch_id]
+        );
+
+        await client.query('BEGIN');
+        const { rows: [variant] } = await client.query(
+            `INSERT INTO product_variants (product_id, name, sku, cost_price, suggested_price)
+             VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+            [productId, name.trim(), sku || null, cost_price || 0, suggested_price || 0]
+        );
+
+        // Init store_stock rows for every branch store
+        for (const store of branchStores) {
+            await client.query(
+                `INSERT INTO store_stock (product_id, store_id, variant_id, quantity)
+                 VALUES ($1,$2,$3,0)
+                 ON CONFLICT DO NOTHING`,
+                [productId, store.id, variant.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, data: { ...variant, stock: 0 } });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ success: false, error: err.message });
+    } finally { client.release(); }
+});
+
+// PUT /api/products/:id/variants/:vid
+router.put('/:id/variants/:vid', requireAdmin, async (req, res) => {
+    try {
+        const { name, sku, cost_price, suggested_price, is_active } = req.body;
+        const { rows: [variant] } = await pool.query(
+            `UPDATE product_variants SET name=$1, sku=$2, cost_price=$3, suggested_price=$4, is_active=$5
+             WHERE id=$6 AND product_id=$7 RETURNING *`,
+            [name, sku || null, cost_price || 0, suggested_price || 0,
+                is_active !== undefined ? is_active : true,
+                req.params.vid, req.params.id]
+        );
+        if (!variant) return res.status(404).json({ success: false, error: 'Không tìm thấy phân loại' });
+        res.json({ success: true, data: variant });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// DELETE /api/products/:id/variants/:vid (soft)
+router.delete('/:id/variants/:vid', requireAdmin, async (req, res) => {
+    try {
+        await pool.query(
+            'UPDATE product_variants SET is_active = FALSE WHERE id = $1 AND product_id = $2',
+            [req.params.vid, req.params.id]
+        );
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

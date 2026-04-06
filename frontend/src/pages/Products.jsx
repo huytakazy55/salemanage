@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { productsApi, categoriesApi } from '../services/api';
+import { productsApi, categoriesApi, variantsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, Edit2, Trash2, X, Package, Upload, ImageOff, Download, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, Package, Upload, ImageOff, Download, FileSpreadsheet, Copy, Layers } from 'lucide-react';
 import { exportToExcel, parseExcel } from '../utils/exportExcel';
 import { CurrencyInput, Req, useFormValidate, FieldError } from '../utils/formUtils';
 
@@ -22,14 +22,26 @@ function ProductImg({ src, size = 40 }) {
     return <img src={`${API_BASE}${src}`} alt="" style={{ width: size, height: size, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border)' }} onError={() => setErr(true)} />;
 }
 
-function ProductModal({ product, categories, onClose, onSaved }) {
-    const [form, setForm] = useState(product ? { ...product, category_id: product.category_id || '' } : EMPTY_FORM);
+function ProductModal({ product, categories, onClose, onSaved, defaultValues = null }) {
+    const isEdit = !!product;
+    const [form, setForm] = useState(
+        isEdit
+            ? { ...product, category_id: product.category_id || '', suggested_price: product.suggested_price || '' }
+            : defaultValues
+                ? { ...EMPTY_FORM, ...defaultValues, sku: '', stock: '', id: undefined }
+                : EMPTY_FORM
+    );
     const [imageFile, setImageFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(product?.image_url ? `${API_BASE}${product.image_url}` : null);
     const [saving, setSaving] = useState(false);
     const fileInputRef = useRef();
-    const isEdit = !!product;
     const { errors, validate, clearError } = useFormValidate();
+    // Variants defined inline while creating/editing
+    const [pendingVariants, setPendingVariants] = useState(
+        isEdit ? (product.variants || []) : []
+    );
+    const [variantInput, setVariantInput] = useState({ name: '', sku: '', cost_price: '', suggested_price: '' });
+    const [showVariants, setShowVariants] = useState(isEdit && (product.variants || []).length > 0);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -39,6 +51,16 @@ function ProductModal({ product, categories, onClose, onSaved }) {
         if (file.size > 5 * 1024 * 1024) return toast.error('Ảnh phải nhỏ hơn 5MB');
         setImageFile(file);
         setPreviewUrl(URL.createObjectURL(file));
+    };
+
+    const addPendingVariant = () => {
+        if (!variantInput.name.trim()) return toast.error('Vui lòng nhập tên phân loại');
+        setPendingVariants(vs => [...vs, { ...variantInput, _temp: Date.now() }]);
+        setVariantInput({ name: '', sku: '', cost_price: '', suggested_price: '' });
+    };
+
+    const removePendingVariant = (idx) => {
+        setPendingVariants(vs => vs.filter((_, i) => i !== idx));
     };
 
     const handleSubmit = async (e) => {
@@ -64,8 +86,27 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                 suggested_price: +form.suggested_price || 0,
             };
             if (imageFile) payload.image = imageFile;
-            if (isEdit) await productsApi.update(product.id, payload);
-            else await productsApi.create(payload);
+            let savedProduct;
+            if (isEdit) {
+                savedProduct = product;
+                await productsApi.update(product.id, payload);
+            } else {
+                const r = await productsApi.create(payload);
+                savedProduct = r.data;
+            }
+            // Create pending variants for new products (or new variants added to edit)
+            if (!isEdit && pendingVariants.length > 0 && savedProduct?.id) {
+                for (const v of pendingVariants) {
+                    try {
+                        await variantsApi.create(savedProduct.id, {
+                            name: v.name,
+                            sku: v.sku || null,
+                            cost_price: +v.cost_price || 0,
+                            suggested_price: +v.suggested_price || 0,
+                        });
+                    } catch (_) { /* skip individual failures */ }
+                }
+            }
             toast.success(isEdit ? 'Đã cập nhật sản phẩm!' : 'Đã thêm sản phẩm!');
             onSaved();
         } catch (err) {
@@ -203,6 +244,54 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                                 💡 Nhân viên bán SP này sẽ nhận được {form.commission_pct || 0}% giá trị đơn hàng chứa SP này
                             </div>
+                            {/* ── Variants section ── */}
+                            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowVariants(v => !v)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: 'var(--primary)', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+                                >
+                                    <Layers size={14} />
+                                    Phân loại sản phẩm {pendingVariants.length > 0 ? `(${pendingVariants.length})` : ''}
+                                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{showVariants ? '▲ ẩn đi' : '▼ Mở rộng'}</span>
+                                </button>
+
+                                {showVariants && (
+                                    <div style={{ marginTop: 10 }}>
+                                        {/* List of pending/existing variants */}
+                                        {pendingVariants.map((v, i) => (
+                                            <div key={v.id || v._temp || i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px', marginBottom: 6 }}>
+                                                <span style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>
+                                                    {v.name}
+                                                    {v.sku && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{v.sku}</span>}
+                                                    {+v.cost_price > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>· {Number(v.cost_price).toLocaleString('vi-VN')}đ</span>}
+                                                </span>
+                                                {!v.id && ( // only allow removing pending (unsaved) variants
+                                                    <button type="button" className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2 }} onClick={() => removePendingVariant(i)}><X size={12} /></button>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        {/* Add new variant input */}
+                                        <div style={{ background: 'var(--bg)', border: '1px dashed var(--border)', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                                            <div className="form-row" style={{ marginBottom: 6 }}>
+                                                <input className="form-control" style={{ fontSize: 12 }} value={variantInput.name} onChange={e => setVariantInput(f => ({ ...f, name: e.target.value }))} placeholder="Tên phân loại (VD: Đỏ, Size L...)" />
+                                                <input className="form-control" style={{ fontSize: 12 }} value={variantInput.sku} onChange={e => setVariantInput(f => ({ ...f, sku: e.target.value }))} placeholder="SKU (tùy chọn)" />
+                                            </div>
+                                            <div className="form-row" style={{ marginBottom: 8 }}>
+                                                <CurrencyInput className="form-control input-currency" style={{ fontSize: 12 }} value={variantInput.cost_price} onChange={v => setVariantInput(f => ({ ...f, cost_price: v }))} placeholder="Giá vốn" />
+                                                <CurrencyInput className="form-control input-currency" style={{ fontSize: 12 }} value={variantInput.suggested_price} onChange={v => setVariantInput(f => ({ ...f, suggested_price: v }))} placeholder="Giá đề xuất" />
+                                            </div>
+                                            <button type="button" className="btn btn-outline btn-sm" onClick={addPendingVariant} style={{ width: '100%', fontSize: 12 }}>
+                                                + Thêm phân loại
+                                            </button>
+                                        </div>
+                                        {!isEdit && pendingVariants.length > 0 && (
+                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>💡 Phân loại sẽ được tạo sau khi lưu sản phẩm</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="modal-footer">
@@ -210,6 +299,129 @@ function ProductModal({ product, categories, onClose, onSaved }) {
                         <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Thêm sản phẩm'}</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+}
+
+// Variants management modal
+function VariantsModal({ product, onClose }) {
+    const [variants, setVariants] = useState(product.variants || []);
+    const [editId, setEditId] = useState(null); // null = adding new, number = editing
+    const [form, setForm] = useState({ name: '', sku: '', cost_price: '', suggested_price: '' });
+    const [saving, setSaving] = useState(false);
+
+    const resetForm = () => { setForm({ name: '', sku: '', cost_price: '', suggested_price: '' }); setEditId(null); };
+
+    const startEdit = (v) => {
+        setEditId(v.id);
+        setForm({ name: v.name, sku: v.sku || '', cost_price: v.cost_price, suggested_price: v.suggested_price });
+    };
+
+    const handleSave = async () => {
+        if (!form.name.trim()) return toast.error('Vui lòng nhập tên phân loại');
+        setSaving(true);
+        try {
+            const payload = {
+                name: form.name.trim(),
+                sku: form.sku || null,
+                cost_price: +form.cost_price || 0,
+                suggested_price: +form.suggested_price || 0,
+            };
+            if (editId) {
+                const r = await variantsApi.update(product.id, editId, payload);
+                setVariants(vs => vs.map(v => v.id === editId ? { ...v, ...r.data } : v));
+                toast.success('Đã cập nhật phân loại');
+            } else {
+                const r = await variantsApi.create(product.id, payload);
+                setVariants(vs => [...vs, r.data]);
+                toast.success('Đã thêm phân loại');
+            }
+            resetForm();
+        } catch (err) { toast.error(err?.error || 'Lỗi lưu phân loại'); }
+        finally { setSaving(false); }
+    };
+
+    const handleDelete = async (v) => {
+        if (!confirm(`Xóa phân loại "${v.name}"?`)) return;
+        try {
+            await variantsApi.delete(product.id, v.id);
+            setVariants(vs => vs.filter(x => x.id !== v.id));
+            toast.success('Đã xóa');
+        } catch (err) { toast.error(err?.error || 'Lỗi xóa'); }
+    };
+
+    return (
+        <div className="modal-overlay" onDoubleClick={onClose}>
+            <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <span className="modal-title">🎨 Phân loại — {product.name}</span>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button>
+                </div>
+                <div className="modal-body">
+                    {/* Variant list */}
+                    {variants.length > 0 && (
+                        <div style={{ marginBottom: 20 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Danh sách phân loại</div>
+                            {variants.map(v => (
+                                <div key={v.id} style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    background: 'var(--bg)', border: '1px solid var(--border)',
+                                    borderRadius: 10, padding: '10px 14px', marginBottom: 8
+                                }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{v.name}
+                                            {v.sku && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>SKU: {v.sku}</span>}
+                                        </div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                                            Tồn: <b>{v.stock ?? 0}</b>
+                                            {+v.cost_price > 0 && <> · Giá vốn: <b>{Number(v.cost_price).toLocaleString('vi-VN')}đ</b></>}
+                                            {+v.suggested_price > 0 && <> · Đề xuất: <b>{Number(v.suggested_price).toLocaleString('vi-VN')}đ</b></>}
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-outline btn-sm btn-icon" onClick={() => startEdit(v)} title="Sửa"><Edit2 size={13} /></button>
+                                    <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(v)} title="Xóa"><Trash2 size={13} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Add/Edit form */}
+                    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
+                            {editId ? '✏️ Sửa phân loại' : '➕ Thêm phân loại mới'}
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">Tên phân loại <Req /></label>
+                                <input className="form-control" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="VD: Đỏ, Size L, Hoa văn..." />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">SKU</label>
+                                <input className="form-control" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="SP001-DO" />
+                            </div>
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">Giá vốn (đ)</label>
+                                <CurrencyInput className="form-control input-currency" value={form.cost_price} onChange={v => setForm(f => ({ ...f, cost_price: v }))} placeholder="50.000" />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Giá đề xuất (đ)</label>
+                                <CurrencyInput className="form-control input-currency" value={form.suggested_price} onChange={v => setForm(f => ({ ...f, suggested_price: v }))} placeholder="70.000" />
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            {editId && <button className="btn btn-outline btn-sm" onClick={resetForm}>Hủy</button>}
+                            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Đang lưu...' : editId ? 'Cập nhật' : 'Thêm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn btn-outline" onClick={onClose}>Đóng</button>
+                </div>
             </div>
         </div>
     );
@@ -313,6 +525,8 @@ export default function Products() {
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('');
     const [modal, setModal] = useState(null);
+    const [cloneSource, setCloneSource] = useState(null);
+    const [variantModal, setVariantModal] = useState(null); // product object
     const [showImport, setShowImport] = useState(false);
 
     const load = useCallback(() => {
@@ -414,7 +628,11 @@ export default function Products() {
                                         </td>
                                         <td>{p.category_name ? <span className="badge badge-primary">{p.category_name}</span> : <span className="text-muted">—</span>}</td>
                                         {isAdmin() ? <td>{fmt(p.cost_price)}</td> : <td>{p.suggested_price > 0 ? fmt(p.suggested_price) : <span className="text-muted">—</span>}</td>}
-                                        <td className={stockClass(p)}>{fmtNum(p.stock)} {p.unit}</td>
+                                        <td className={stockClass(p)}>
+                                            {p.has_variants
+                                                ? <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(p.variants || []).length} phân loại</span>
+                                                : <>{fmtNum(p.stock)} {p.unit}</>}
+                                        </td>
                                         <td>{stockBadge(p)}</td>
                                         {isAdmin() && (
                                             <td>
@@ -426,6 +644,8 @@ export default function Products() {
                                         {isAdmin() && (
                                             <td>
                                                 <div className="flex gap-2">
+                                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setVariantModal(p)} title="Phân loại" style={{ color: 'var(--primary)' }}><Layers size={13} /></button>
+                                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => { setCloneSource(p); setModal('add'); }} title="Sao chép"><Copy size={13} /></button>
                                                     <button className="btn btn-outline btn-sm btn-icon" onClick={() => setModal(p)} title="Sửa"><Edit2 size={13} /></button>
                                                     <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(p)} title="Xóa"><Trash2 size={13} /></button>
                                                 </div>
@@ -443,8 +663,15 @@ export default function Products() {
                 <ProductModal
                     product={modal === 'add' ? null : modal}
                     categories={categories}
-                    onClose={() => setModal(null)}
-                    onSaved={() => { setModal(null); load(); }}
+                    defaultValues={modal === 'add' ? cloneSource : null}
+                    onClose={() => { setModal(null); setCloneSource(null); }}
+                    onSaved={() => { setModal(null); setCloneSource(null); load(); }}
+                />
+            )}
+            {variantModal && (
+                <VariantsModal
+                    product={variantModal}
+                    onClose={() => { setVariantModal(null); load(); }}
                 />
             )}
             {showImport && (

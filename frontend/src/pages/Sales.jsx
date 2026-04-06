@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { productsApi, ordersApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { ShoppingCart, Search, Minus, Plus, Trash2, CheckCircle, X } from 'lucide-react';
+import { ShoppingCart, Search, Minus, Plus, Trash2, CheckCircle, X, Layers } from 'lucide-react';
 import { CurrencyInput, Req } from '../utils/formUtils';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
@@ -139,6 +139,55 @@ function AddToCartPopup({ product, onConfirm, onClose, isEmployee }) {
     );
 }
 
+/** Picker: chọn phân loại sản phẩm trước khi thêm vào giỏ */
+function VariantPickerModal({ product, onPick, onClose, isEmployee }) {
+    return (
+        <div className="modal-overlay modal-center" onDoubleClick={onClose}>
+            <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <span className="modal-title">🎨 Chọn phân loại</span>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+                </div>
+                <div className="modal-body" style={{ padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: 'var(--text-muted)' }}>{product.name}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {(product.variants || []).map(v => {
+                            const outOfStock = (v.stock || 0) === 0;
+                            return (
+                                <button
+                                    key={v.id}
+                                    className={`btn ${outOfStock ? 'btn-outline' : 'btn-primary'}`}
+                                    style={{
+                                        justifyContent: 'space-between', padding: '10px 16px',
+                                        opacity: outOfStock ? 0.5 : 1, cursor: outOfStock ? 'not-allowed' : 'pointer'
+                                    }}
+                                    disabled={outOfStock}
+                                    onClick={() => !outOfStock && onPick({
+                                        ...product,
+                                        // Override with variant data
+                                        variant_id: v.id,
+                                        variant_name: v.name,
+                                        stock: v.stock || 0,
+                                        cost_price: +v.cost_price > 0 ? v.cost_price : product.cost_price,
+                                        suggested_price: +v.suggested_price > 0 ? v.suggested_price : product.suggested_price,
+                                        sell_price: +v.suggested_price > 0 ? v.suggested_price : product.sell_price,
+                                    })}
+                                >
+                                    <span style={{ fontWeight: 700 }}>{v.name}{v.sku ? <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 6 }}>({v.sku})</span> : ''}</span>
+                                    <span style={{ fontSize: 12 }}>
+                                        {outOfStock ? 'Hết hàng' : `Còn ${v.stock}`}
+                                        {!isEmployee && +v.suggested_price > 0 && <> · {Number(v.suggested_price).toLocaleString('vi-VN')}đ</>}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Sales() {
     const { user } = useAuth();
     const isEmployee = user?.role === 'employee';
@@ -151,6 +200,7 @@ export default function Sales() {
     const [submitting, setSubmitting] = useState(false);
     const [successOrder, setSuccessOrder] = useState(null);
     const [popupProduct, setPopupProduct] = useState(null);
+    const [variantPickerProduct, setVariantPickerProduct] = useState(null);
     const [cartOpen, setCartOpen] = useState(false); // mobile cart toggle
 
     useEffect(() => {
@@ -163,44 +213,55 @@ export default function Sales() {
     );
 
     const handleProductClick = (product) => {
-        if (product.stock === 0) return toast.error('Sản phẩm đã hết hàng!');
-        setPopupProduct(product);
+        if (product.has_variants) {
+            // Show variant picker first
+            const totalVariantStock = (product.variants || []).reduce((s, v) => s + (v.stock || 0), 0);
+            if (totalVariantStock === 0) return toast.error('Sản phẩm đã hết tất cả phân loại!');
+            setVariantPickerProduct(product);
+        } else {
+            if (product.stock === 0) return toast.error('Sản phẩm đã hết hàng!');
+            setPopupProduct(product);
+        }
     };
 
     const handleConfirmAdd = ({ qty, sell_price, ...product }) => {
+        // Cart key: product+variant combination
+        const cartKey = product.variant_id ? `${product.id}_v${product.variant_id}` : `${product.id}`;
         setCart(prev => {
-            const existing = prev.find(i => i.id === product.id);
+            const existing = prev.find(i => i._cartKey === cartKey);
             if (existing) {
                 const newQty = existing.qty + qty;
                 if (newQty > product.stock) {
                     toast.error(`Chỉ còn ${product.stock} ${product.unit} trong kho!`);
                     return prev;
                 }
-                return prev.map(i => i.id === product.id ? { ...i, qty: newQty, sell_price } : i);
+                return prev.map(i => i._cartKey === cartKey ? { ...i, qty: newQty, sell_price } : i);
             }
-            return [...prev, { ...product, qty, sell_price }];
+            return [...prev, { ...product, qty, sell_price, _cartKey: cartKey }];
         });
         setPopupProduct(null);
-        setCartOpen(true); // auto-open cart on mobile after adding
-        toast.success(`Đã thêm ${qty} × ${product.name}`, { duration: 1500, icon: '🛒' });
+        setVariantPickerProduct(null);
+        setCartOpen(true);
+        const label = product.variant_name ? `${product.name} · ${product.variant_name}` : product.name;
+        toast.success(`Đã thêm ${qty} × ${label}`, { duration: 1500, icon: '🛒' });
     };
 
-    const updateQty = (id, delta) => {
+    const updateQty = (cartKey, delta) => {
         setCart(prev => {
-            const item = prev.find(i => i.id === id);
+            const item = prev.find(i => i._cartKey === cartKey);
             const newQty = (item?.qty || 0) + delta;
-            if (newQty <= 0) return prev.filter(i => i.id !== id);
-            const product = products.find(p => p.id === id);
-            if (newQty > (product?.stock || 0)) { toast.error(`Chỉ còn ${product.stock} ${product.unit}!`); return prev; }
-            return prev.map(i => i.id === id ? { ...i, qty: newQty } : i);
+            if (newQty <= 0) return prev.filter(i => i._cartKey !== cartKey);
+            const product = products.find(p => p.id === item?.id);
+            if (newQty > (item?.stock || product?.stock || 0)) { toast.error(`Chỉ còn ${item?.stock || product?.stock} ${item?.unit}!`); return prev; }
+            return prev.map(i => i._cartKey === cartKey ? { ...i, qty: newQty } : i);
         });
     };
 
-    const updateSellPrice = (id, price) => {
-        setCart(prev => prev.map(i => i.id === id ? { ...i, sell_price: price } : i));
+    const updateSellPrice = (cartKey, price) => {
+        setCart(prev => prev.map(i => i._cartKey === cartKey ? { ...i, sell_price: price } : i));
     };
 
-    const removeItem = (id) => setCart(prev => prev.filter(i => i.id !== id));
+    const removeItem = (cartKey) => setCart(prev => prev.filter(i => i._cartKey !== cartKey));
     const clearCart = () => setCart([]);
 
     const totalAmount = cart.reduce((s, i) => s + (+i.sell_price || 0) * i.qty, 0);
@@ -216,7 +277,12 @@ export default function Sales() {
         setSubmitting(true);
         try {
             const result = await ordersApi.create({
-                items: cart.map(i => ({ product_id: i.id, quantity: i.qty, sell_price: +i.sell_price })),
+                items: cart.map(i => ({
+                    product_id: i.id,
+                    quantity: i.qty,
+                    sell_price: +i.sell_price,
+                    ...(i.variant_id ? { variant_id: i.variant_id, variant_name: i.variant_name } : {}),
+                })),
                 customer_name: customerName || null,
                 discount: +discount,
                 payment_method: payMethod,
@@ -305,20 +371,23 @@ export default function Sales() {
                                 const sellPrice = +item.sell_price || 0;
                                 const profit = (sellPrice - item.cost_price) * item.qty;
                                 return (
-                                    <div key={item.id} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-light)' }}>
+                                    <div key={item._cartKey} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-light)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                                            <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2, flexShrink: 0 }} onClick={() => removeItem(item.id)}><X size={12} /></button>
-                                            <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{item.name}</span>
+                                            <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2, flexShrink: 0 }} onClick={() => removeItem(item._cartKey)}><X size={12} /></button>
+                                            <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>
+                                                {item.name}
+                                                {item.variant_name && <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--primary)', marginTop: 1 }}>🎨 {item.variant_name}</span>}
+                                            </span>
                                             {sellPrice > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{fmt(sellPrice * item.qty)}</span>}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 24 }}>
                                             <div className="cart-qty-control">
-                                                <button className="qty-btn" onClick={() => updateQty(item.id, -1)}><Minus size={11} /></button>
+                                                <button className="qty-btn" onClick={() => updateQty(item._cartKey, -1)}><Minus size={11} /></button>
                                                 <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 600, fontSize: 13 }}>{item.qty}</span>
-                                                <button className="qty-btn" onClick={() => updateQty(item.id, 1)}><Plus size={11} /></button>
+                                                <button className="qty-btn" onClick={() => updateQty(item._cartKey, 1)}><Plus size={11} /></button>
                                             </div>
                                             <input type="number" className="form-control" placeholder="Giá bán..."
-                                                value={item.sell_price} onChange={e => updateSellPrice(item.id, e.target.value)} min="0"
+                                                value={item.sell_price} onChange={e => updateSellPrice(item._cartKey, e.target.value)} min="0"
                                                 style={{ fontSize: 12, padding: '4px 8px', flex: 1, borderColor: !+item.sell_price ? 'var(--warning)' : 'var(--border)' }} />
                                             {sellPrice > 0 && (
                                                 <span style={{ fontSize: 11, color: profit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600, flexShrink: 0 }}>+{fmt(profit)}</span>
@@ -400,6 +469,18 @@ export default function Sales() {
                     product={popupProduct}
                     onConfirm={handleConfirmAdd}
                     onClose={() => setPopupProduct(null)}
+                    isEmployee={isEmployee}
+                />
+            )}
+
+            {variantPickerProduct && !popupProduct && (
+                <VariantPickerModal
+                    product={variantPickerProduct}
+                    onPick={(variantProduct) => {
+                        setVariantPickerProduct(null);
+                        setPopupProduct(variantProduct);
+                    }}
+                    onClose={() => setVariantPickerProduct(null)}
                     isEmployee={isEmployee}
                 />
             )}

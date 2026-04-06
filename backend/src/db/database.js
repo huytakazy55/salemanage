@@ -255,6 +255,23 @@ async function initSchema() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_notifications_store_read ON notifications(store_id, is_read, created_at DESC);
+
+      -- ── Product Variants ─────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS product_variants (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        sku TEXT,
+        cost_price NUMERIC(15,0) NOT NULL DEFAULT 0,
+        suggested_price NUMERIC(15,0) NOT NULL DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      -- Stock per variant (variant_id null = base product stock)
+      ALTER TABLE store_stock ADD COLUMN IF NOT EXISTS variant_id INTEGER REFERENCES product_variants(id) ON DELETE CASCADE;
+      -- Order items: track which variant was sold
+      ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_id INTEGER REFERENCES product_variants(id) ON DELETE SET NULL;
+      ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_name TEXT;
     `);
     console.log('✅ Schema initialized');
   } finally {

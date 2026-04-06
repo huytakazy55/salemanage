@@ -857,6 +857,12 @@ select.form-control {
   animation: slideUp .2s ease;
   display: flex;
   flex-direction: column;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal::-webkit-scrollbar {
+  display: none;
 }
 
 /* Sticky modal footer — always visible */
@@ -882,6 +888,15 @@ select.form-control {
 
 .modal-body {
   padding: 20px 24px;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
+}
+
+.modal-body::-webkit-scrollbar {
+  display: none;
+  /* Chrome/Safari/Opera */
 }
 
 .modal-footer {
