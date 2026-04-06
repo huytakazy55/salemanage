@@ -56,6 +56,7 @@ function StoreModal({ store, branches, onClose, onSave }) {
         address: store?.address || '',
         phone: store?.phone || '',
         branch_id: store?.branch_id || '',
+        max_employees: store?.max_employees ?? 1,
     });
     const [saving, setSaving] = useState(false);
 
@@ -109,6 +110,13 @@ function StoreModal({ store, branches, onClose, onSave }) {
                                 <label className="form-label">Số điện thoại</label>
                                 <input className="form-control" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="0901234567" />
                             </div>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">🔑 Giới hạn nhân viên (Quota)</label>
+                            <input type="number" className="form-control" style={{ width: 120 }}
+                                value={form.max_employees} min="0" step="1"
+                                onChange={e => setForm(f => ({ ...f, max_employees: +e.target.value }))} />
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Tối đa nhân viên admin này được tạo (mặc định: 1)</div>
                         </div>
                     </div>
                     <div className="modal-footer">
@@ -279,7 +287,7 @@ function StoreCard({ store, onEdit, onDelete, nosBranch }) {
                 </div>
                 <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
-                        <Users size={13} /><span>{store.user_count || 0} nhân viên</span>
+                        <Users size={13} /><span>{store.user_count || 0} / {store.max_employees ?? 1} nhân viên</span>
                     </div>
                     {store.phone && <div style={{ color: 'var(--text-secondary)' }}>📞 {store.phone}</div>}
                     {nosBranch && <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>Chưa có chi nhánh</span>}

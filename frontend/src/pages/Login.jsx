@@ -159,8 +159,12 @@ export default function Login() {
                     </button>
                 </form>
 
-                {/* Divider + credits */}
+                {/* Divider + links */}
                 <div style={{ textAlign: 'center', marginTop: 28, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ marginBottom: 12 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>Chưa có tài khoản? </span>
+                        <a href="/dang-ky" style={{ color: '#a5b4fc', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Đăng ký ngay</a>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>
                         <Zap size={12} />
                         <span>SaleManage v1.0</span>

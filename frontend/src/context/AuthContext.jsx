@@ -24,13 +24,20 @@ export function AuthProvider({ children }) {
         setUser(null);
     };
 
+    // Used after registration — token + user already returned by API
+    const loginWithToken = (token, userData) => {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+    };
+
     // super_admin = global admin (manages all stores)
     const isSuperAdmin = () => user?.role === 'super_admin';
     // isAdmin = has admin-level access (admin or super_admin)
     const isAdmin = () => ['admin', 'super_admin'].includes(user?.role);
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isAdmin, isSuperAdmin, loading }}>
+        <AuthContext.Provider value={{ user, login, loginWithToken, logout, isAdmin, isSuperAdmin, loading }}>
             {children}
         </AuthContext.Provider>
     );

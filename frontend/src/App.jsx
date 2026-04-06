@@ -19,6 +19,7 @@ import StoresPage from './pages/Stores';
 import EmployeeReport from './pages/EmployeeReport';
 import AuditLogs from './pages/AuditLogs';
 import ShiftReport from './pages/ShiftReport';
+import Register from './pages/Register';
 
 function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
     const { isAdmin, isSuperAdmin } = useAuth();
@@ -150,6 +151,7 @@ export default function App() {
                 <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
                 <Routes>
                     <Route path="/login" element={<LoginGuard />} />
+                    <Route path="/dang-ky" element={<RegisterGuard />} />
                     <Route path="/*" element={<AppLayout />} />
                 </Routes>
             </BrowserRouter>
@@ -162,4 +164,11 @@ function LoginGuard() {
     if (loading) return null;
     if (user) return <Navigate to="/" replace />;
     return <Login />;
+}
+
+function RegisterGuard() {
+    const { user, loading } = useAuth();
+    if (loading) return null;
+    if (user) return <Navigate to="/" replace />;
+    return <Register />;
 }

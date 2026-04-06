@@ -13,16 +13,23 @@ router.get('/', requireAdmin, async (req, res) => {
         let query, params;
         if (req.user.role === 'super_admin') {
             query = `SELECT u.id, u.username, u.full_name, u.role, u.store_id, u.is_active, u.created_at,
-                     s.name as store_name FROM users u LEFT JOIN stores s ON s.id = u.store_id ORDER BY u.role DESC, u.full_name ASC`;
+                     s.name as store_name, s.max_employees FROM users u LEFT JOIN stores s ON s.id = u.store_id ORDER BY u.role DESC, u.full_name ASC`;
             params = [];
         } else {
             query = `SELECT u.id, u.username, u.full_name, u.role, u.store_id, u.is_active, u.created_at,
-                     s.name as store_name FROM users u LEFT JOIN stores s ON s.id = u.store_id
+                     s.name as store_name, s.max_employees FROM users u LEFT JOIN stores s ON s.id = u.store_id
                      WHERE u.store_id = $1 ORDER BY u.role DESC, u.full_name ASC`;
             params = [req.user.store_id];
         }
         const { rows } = await pool.query(query, params);
-        res.json({ success: true, data: rows });
+        // Attach quota summary for admin
+        let quota = null;
+        if (req.user.role === 'admin' && rows.length > 0) {
+            const maxEmp = rows[0].max_employees ?? 1;
+            const usedEmp = rows.filter(u => u.role === 'employee').length;
+            quota = { used: usedEmp, max: maxEmp };
+        }
+        res.json({ success: true, data: rows, quota });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
@@ -37,10 +44,28 @@ router.post('/', requireAdmin, async (req, res) => {
         if (req.user.role === 'admin') {
             assignedStoreId = req.user.store_id;
         }
-        // employees must have a store
         const safeRole = role || 'employee';
         if (safeRole !== 'super_admin' && !assignedStoreId) {
             return res.status(400).json({ success: false, error: 'Cần chọn cửa hàng cho tài khoản này' });
+        }
+
+        // ── Quota check: admin can only create employees up to max_employees ──
+        if (req.user.role === 'admin' && safeRole === 'employee') {
+            const { rows: [store] } = await pool.query(
+                'SELECT max_employees FROM stores WHERE id = $1', [assignedStoreId]
+            );
+            const maxEmp = store?.max_employees ?? 1;
+            const { rows: [cnt] } = await pool.query(
+                `SELECT COUNT(*) as c FROM users WHERE store_id = $1 AND role = 'employee' AND is_active = TRUE`,
+                [assignedStoreId]
+            );
+            if (+cnt.c >= maxEmp) {
+                return res.status(403).json({
+                    success: false,
+                    error: `Tài khoản của bạn chỉ được tạo tối đa ${maxEmp} nhân viên. Vui lòng liên hệ để nâng cấp gói.`,
+                    quota_exceeded: true,
+                });
+            }
         }
 
         const hash = await bcrypt.hash(password, 10);

@@ -272,6 +272,8 @@ async function initSchema() {
       -- Order items: track which variant was sold
       ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_id INTEGER REFERENCES product_variants(id) ON DELETE SET NULL;
       ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_name TEXT;
+      -- ── Employee quota per store ──────────────────────────────────
+      ALTER TABLE stores ADD COLUMN IF NOT EXISTS max_employees INTEGER DEFAULT 1;
     `);
     console.log('✅ Schema initialized');
   } finally {

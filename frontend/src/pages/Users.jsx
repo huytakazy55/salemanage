@@ -133,6 +133,7 @@ export default function UsersPage() {
     const [stores, setStores] = useState([]);
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState(null);
+    const [quota, setQuota] = useState(null); // { used, max } — admin only
 
     const load = useCallback(() => {
         setLoading(true);
@@ -142,6 +143,7 @@ export default function UsersPage() {
         ]).then(([u, s]) => {
             setUsers(u.data || []);
             setStores(s.data || []);
+            if (u.quota) setQuota(u.quota);
         }).finally(() => setLoading(false));
     }, [isSuperAdmin]);
 
@@ -164,6 +166,36 @@ export default function UsersPage() {
                     <Plus size={14} /> Thêm người dùng
                 </button>
             </div>
+
+            {/* Quota bar — visible to admin only */}
+            {quota && !isSuperAdmin() && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px',
+                    background: quota.used >= quota.max ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.06)',
+                    border: `1px solid ${quota.used >= quota.max ? 'rgba(239,68,68,0.25)' : 'rgba(99,102,241,0.18)'}`,
+                    borderRadius: 12, marginBottom: 16,
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                            {quota.used >= quota.max
+                                ? '🔒 Đã đạt giới hạn nhân viên'
+                                : `👥 Nhân viên: ${quota.used}/${quota.max}`}
+                        </div>
+                        <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{
+                                height: '100%', borderRadius: 3, transition: 'width .3s',
+                                background: quota.used >= quota.max ? '#ef4444' : 'var(--primary)',
+                                width: `${Math.min(100, (quota.used / quota.max) * 100)}%`,
+                            }} />
+                        </div>
+                    </div>
+                    {quota.used >= quota.max && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
+                            Liên hệ admin<br />để nâng cấp gói
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="card">
                 {loading ? <div className="spinner-wrap"><div className="spinner" /></div> :
