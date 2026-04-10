@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3001;
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost')
     .split(',')
     .map(o => o.trim())
-    .concat(['http://localhost', 'http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1']);
+    .concat(['http://localhost', 'http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1', 'http://51.79.146.227:8082', 'http://51.79.146.227']);
 
 app.use(cors({
     origin: (origin, callback) => {

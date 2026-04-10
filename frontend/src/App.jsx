@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
 import NotificationBell from './components/NotificationBell';
+
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -149,7 +150,7 @@ function AppLayout() {
             <MobileBottomNav onOpenSidebar={() => setSidebarOpen(true)} />
 
             {/* Theme toggle — bottom left, always visible */}
-            <ThemeToggle />
+
         </div>
     );
 }
