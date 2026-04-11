@@ -155,16 +155,26 @@ function AppLayout() {
     );
 }
 
+import ParticleBackground from './components/ParticleBackground';
+
 export default function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
-                <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-                <Routes>
-                    <Route path="/login" element={<LoginGuard />} />
-                    <Route path="/dang-ky" element={<RegisterGuard />} />
-                    <Route path="/*" element={<AppLayout />} />
-                </Routes>
+                {/* Global particle background layer */}
+                <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+                    <ParticleBackground />
+                </div>
+                
+                {/* Main app content layer */}
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                    <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
+                    <Routes>
+                        <Route path="/login" element={<LoginGuard />} />
+                        <Route path="/dang-ky" element={<RegisterGuard />} />
+                        <Route path="/*" element={<AppLayout />} />
+                    </Routes>
+                </div>
             </BrowserRouter>
         </AuthProvider>
     );

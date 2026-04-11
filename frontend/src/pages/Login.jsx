@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { LogIn, Eye, EyeOff, Zap } from 'lucide-react';
-import ParticleBackground from '../components/ParticleBackground';
+import { LogIn, Eye, EyeOff, Zap, Moon, Sun } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Login() {
     const { login } = useAuth();
+    const { dark, toggle } = useTheme();
     const [form, setForm] = useState({ username: '', password: '' });
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -28,13 +29,38 @@ export default function Login() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: '#0d0d1a',
+            background: 'transparent',
             position: 'relative',
             overflow: 'hidden',
             fontFamily: "'Inter', sans-serif",
         }}>
-            {/* Interactive Particle Background */}
-            <ParticleBackground />
+            
+            {/* Theme Toggle for Login Page */}
+            <button
+                onClick={toggle}
+                style={{
+                    position: 'absolute',
+                    top: 24,
+                    right: 24,
+                    zIndex: 20,
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.05)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: dark ? '#fff' : '#1e1b4b',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}
+                title={dark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
+            >
+                {dark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
 
             <style>{`
         @keyframes pulse-ring { 0% { transform: scale(0.95); opacity:1; } 100% { transform: scale(1.3); opacity:0; } }

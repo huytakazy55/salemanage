@@ -18,19 +18,18 @@ export default function ParticleBackground() {
         let particles = [];
         let penguins = [];
         let activeHoles = []; // Dynamic holes that open and close
+        let galaxies = []; // Static background galaxies
         let shootingStars = []; // Shooting stars
         let shootingStarTimer = 0;
         let spawnTimer = 0;
         const TARGET_PENGUINS = 8;
 
-        // Night sky star colors: warm whites, golds, soft blues
+        // Vibrant Night sky star colors: whites, bright yellows, vivid blues
         const starColors = [
-            '#ffffff', '#ffffff', '#ffffff', '#ffffff',  // White (most common)
-            '#f0f0ff', '#e8e8ff',                        // Cool white
-            '#fff8e7', '#fff4d6', '#ffe9a0',             // Warm gold
-            '#ffd700',                                    // Gold
-            '#add8e6', '#b0c4de',                        // Light blue
-            '#fffacd',                                    // Lemon chiffon
+            '#ffffff', '#ffffff', '#ffffff', '#ffffff',  // Bright White (chủ đạo)
+            '#ffd700', '#ffea00', '#ffcc00',             // Vàng tươi / Gold (Yellow)
+            '#4d94ff', '#00e5ff', '#1e90ff',             // Xanh lam sáng / Xanh lơ (Blue)
+            '#ffb84d', '#f0f0ff'                         // Cam nhạt và Trắng lạnh
         ];
 
         function resize() {
@@ -54,12 +53,54 @@ export default function ParticleBackground() {
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 color, size, starType,
-                alpha: Math.random() * 0.7 + 0.2,
+                alpha: Math.random() * 0.5 + 0.5,
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.005,
                 twinklePhase: Math.random() * Math.PI * 2,
                 twinkleSpeed: Math.random() * 0.03 + 0.01,
+                isBlinking: false,
+                blinkLife: 0,
             };
+        }
+
+        function initGalaxies() {
+            galaxies = [];
+            const count = Math.random() > 0.5 ? 2 : 3; // 2 to 3 galaxies
+            for (let i = 0; i < count; i++) {
+                galaxies.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radiusX: Math.random() * 300 + 200, // Very wide
+                    radiusY: Math.random() * 80 + 50, // Thin ellipse
+                    rotation: Math.random() * Math.PI * 2,
+                    colorStr: ['37, 99, 235', '147, 51, 234', '219, 39, 119'][Math.floor(Math.random() * 3)], // Deep blue, purple, pink
+                    alpha: Math.random() * 0.15 + 0.05
+                });
+            }
+        }
+
+        function drawGalaxies() {
+            for (const g of galaxies) {
+                ctx.save();
+                ctx.translate(g.x, g.y);
+                ctx.rotate(g.rotation);
+                ctx.globalAlpha = g.alpha;
+
+                // Elliptical gradient glow
+                const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, g.radiusX);
+                grd.addColorStop(0, `rgba(${g.colorStr}, 0.8)`);
+                grd.addColorStop(0.4, `rgba(${g.colorStr}, 0.3)`);
+                grd.addColorStop(1, `rgba(${g.colorStr}, 0)`);
+
+                ctx.fillStyle = grd;
+                // Squeeze Y axis to form an ellipse
+                ctx.scale(1, g.radiusY / g.radiusX);
+                ctx.beginPath();
+                ctx.arc(0, 0, g.radiusX, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
         }
 
         function initParticles() {
@@ -71,6 +112,7 @@ export default function ParticleBackground() {
                 p.originY = p.y;
                 particles.push(p);
             }
+            initGalaxies();
         }
 
         function drawStar(cx, cy, points, outerR, innerR) {
@@ -85,9 +127,33 @@ export default function ParticleBackground() {
         }
 
         function drawParticle(p) {
-            // Twinkle effect
-            const twinkle = Math.sin(Date.now() * p.twinkleSpeed * 0.06 + p.twinklePhase);
-            const alpha = p.alpha * (0.6 + twinkle * 0.4);
+            // Trigger random slow blink
+            if (!p.isBlinking && Math.random() < 0.00015) {
+                p.isBlinking = true;
+                p.blinkLife = 0;
+            }
+
+            let alpha = p.alpha;
+            let sizeScale = 1;
+
+            if (p.isBlinking) {
+                p.blinkLife++;
+                const duration = 150; // Slow pulse over ~2.5 seconds
+                if (p.blinkLife >= duration) {
+                    p.isBlinking = false;
+                } else {
+                    const pulse = Math.sin((p.blinkLife / duration) * Math.PI);
+                    // Smoothly transition alpha up to 1
+                    alpha = p.alpha + pulse * (1 - p.alpha);
+                    // Subtle dynamic size increase
+                    sizeScale = 1 + pulse * 0.4;
+                }
+            } else {
+                // Normal subtle twinkling
+                const twinkle = Math.sin(Date.now() * p.twinkleSpeed * 0.06 + p.twinklePhase);
+                alpha = p.alpha * (0.8 + twinkle * 0.2);
+            }
+
             if (alpha <= 0.02) return;
 
             ctx.save();
@@ -95,14 +161,13 @@ export default function ParticleBackground() {
             ctx.rotate(p.rotation);
             ctx.globalAlpha = alpha;
 
-            const s = p.size;
+            const s = p.size * sizeScale;
 
             switch (p.starType) {
                 case 'dot':
-                    // Tiny round star with soft glow
+                    // Tiny angular pointy star instead of a round dot
                     ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, s * 0.6, 0, Math.PI * 2);
+                    drawStar(0, 0, 4, s * 0.9, s * 0.3);
                     ctx.fill();
                     break;
 
@@ -157,11 +222,11 @@ export default function ParticleBackground() {
 
         // ==================== SHOOTING STARS ====================
         function createShootingStar() {
-            // Start from top area, fly diagonally down-left or down-right
-            const goLeft = Math.random() > 0.3; // mostly top-right to bottom-left
+            // Start from top area, fly mostly horizontally left or right
+            const goLeft = Math.random() > 0.5; // 50/50 chance
             const angle = goLeft
-                ? Math.PI * (0.55 + Math.random() * 0.25) // ~100° - 145° (down-left)
-                : Math.PI * (0.15 + Math.random() * 0.2);  // ~27° - 63° (down-right)
+                ? Math.PI * (0.90 + Math.random() * 0.08) // Nearly horizontal left (slight downward tilt)
+                : Math.PI * (0.02 + Math.random() * 0.08); // Nearly horizontal right (slight downward tilt)
             const speed = Math.random() * 6 + 8; // fast!
             return {
                 x: goLeft ? canvas.width * (0.3 + Math.random() * 0.7) : Math.random() * canvas.width * 0.5,
@@ -361,15 +426,27 @@ export default function ParticleBackground() {
         }
 
         // ==================== SURFACES ====================
+        let cachedSurfaces = [];
+        let lastSurfaceUpdate = 0;
+
         function getSurfaces() {
+            const now = Date.now();
+            if (now - lastSurfaceUpdate < 500) return cachedSurfaces;
+
             const surfaces = [
-                { x: 0, y: canvas.height, width: canvas.width, type: 'ground' }
+                { x: -100, y: canvas.height, width: canvas.width + 200, type: 'ground' }
             ];
-            const card = document.querySelector('[data-login-card]');
-            if (card) {
-                const rect = card.getBoundingClientRect();
-                surfaces.push({ x: rect.left, y: rect.top, width: rect.width, type: 'card' });
+            const elements = document.querySelectorAll('.card, .topbar, [data-login-card], .stat-card');
+            for (let i = 0; i < elements.length; i++) {
+                const rect = elements[i].getBoundingClientRect();
+                // Ensure the surface is visible on screen
+                if (rect.width > 0 && rect.height > 0 && rect.top > 0 && rect.bottom <= canvas.height + 50) {
+                    surfaces.push({ x: rect.left, y: rect.top, width: rect.width, type: 'card' });
+                }
             }
+
+            cachedSurfaces = surfaces;
+            lastSurfaceUpdate = now;
             return surfaces;
         }
 
@@ -430,7 +507,9 @@ export default function ParticleBackground() {
             ctx.quadraticCurveTo(-6 * s, -2 * s - flapY * 0.7, -10 * s, 2 * s - flapY);
             ctx.quadraticCurveTo(-8 * s, 4 * s - flapY * 0.5, -4 * s, 6 * s - flapY * 0.3);
             ctx.quadraticCurveTo(-2 * s, 4 * s, 0, 2 * s);
-            ctx.closePath(); ctx.fill();
+            ctx.closePath();
+            ctx.lineJoin = 'round'; ctx.lineWidth = 3 * s; ctx.strokeStyle = '#2a2a3e'; ctx.stroke();
+            ctx.fill();
             ctx.restore();
             ctx.save();
             ctx.translate(9 * s, -4 * s);
@@ -439,7 +518,9 @@ export default function ParticleBackground() {
             ctx.quadraticCurveTo(6 * s, -2 * s - flapY * 0.7, 10 * s, 2 * s - flapY);
             ctx.quadraticCurveTo(8 * s, 4 * s - flapY * 0.5, 4 * s, 6 * s - flapY * 0.3);
             ctx.quadraticCurveTo(2 * s, 4 * s, 0, 2 * s);
-            ctx.closePath(); ctx.fill();
+            ctx.closePath();
+            ctx.lineJoin = 'round'; ctx.lineWidth = 3 * s; ctx.strokeStyle = '#2a2a3e'; ctx.stroke();
+            ctx.fill();
             ctx.restore();
 
             // Head
@@ -510,13 +591,11 @@ export default function ParticleBackground() {
             const wingSwing = pg.state === 'walking' ? Math.sin(walkCycle * 2) * 2 : 0;
             ctx.fillStyle = '#2a2a3e';
             ctx.save();
-            ctx.translate(0, -13 * s);
+            ctx.translate(0, -11 * s);
+            ctx.rotate(wingSwing * 0.05 + 0.2);
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(-3 * s, 2 * s + wingSwing, -4 * s, 6 * s + wingSwing);
-            ctx.quadraticCurveTo(-3.5 * s, 9 * s + wingSwing * 0.5, -1 * s, 8 * s);
-            ctx.quadraticCurveTo(1 * s, 5 * s, 0, 2 * s);
-            ctx.closePath(); ctx.fill();
+            ctx.ellipse(-1 * s, 4 * s, 2.5 * s, 6 * s, -0.2, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
 
             // Foot (front)
@@ -580,23 +659,19 @@ export default function ParticleBackground() {
             ctx.fillStyle = '#2a2a3e';
             // Left wing
             ctx.save();
-            ctx.translate(-7 * s, -12 * s);
+            ctx.translate(-7 * s, -10 * s);
+            ctx.rotate(0.3);
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(-3 * s, 2 * s, -3.5 * s, 6 * s);
-            ctx.quadraticCurveTo(-2.5 * s, 8 * s, -0.5 * s, 7 * s);
-            ctx.quadraticCurveTo(1 * s, 4 * s, 0, 2 * s);
-            ctx.closePath(); ctx.fill();
+            ctx.ellipse(0, 4 * s, 2.5 * s, 6 * s, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
             // Right wing
             ctx.save();
-            ctx.translate(7 * s, -12 * s);
+            ctx.translate(7 * s, -10 * s);
+            ctx.rotate(-0.3);
             ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(3 * s, 2 * s, 3.5 * s, 6 * s);
-            ctx.quadraticCurveTo(2.5 * s, 8 * s, 0.5 * s, 7 * s);
-            ctx.quadraticCurveTo(-1 * s, 4 * s, 0, 2 * s);
-            ctx.closePath(); ctx.fill();
+            ctx.ellipse(0, 4 * s, 2.5 * s, 6 * s, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
 
             // Tail (visible from behind, small triangle)
@@ -659,15 +734,13 @@ export default function ParticleBackground() {
             // Wings wrapped around body
             ctx.fillStyle = '#2a2a3e';
             ctx.save(); ctx.translate(-8 * s, -8 * s);
-            ctx.beginPath(); ctx.moveTo(0, -2 * s);
-            ctx.quadraticCurveTo(-3 * s, 0, -2 * s, 4 * s);
-            ctx.quadraticCurveTo(0, 5 * s, 1 * s, 3 * s);
-            ctx.closePath(); ctx.fill(); ctx.restore();
+            ctx.rotate(-0.5);
+            ctx.beginPath(); ctx.ellipse(-2 * s, 2 * s, 2.5 * s, 5 * s, 0, 0, Math.PI * 2);
+            ctx.fill(); ctx.restore();
             ctx.save(); ctx.translate(8 * s, -8 * s);
-            ctx.beginPath(); ctx.moveTo(0, -2 * s);
-            ctx.quadraticCurveTo(3 * s, 0, 2 * s, 4 * s);
-            ctx.quadraticCurveTo(0, 5 * s, -1 * s, 3 * s);
-            ctx.closePath(); ctx.fill(); ctx.restore();
+            ctx.rotate(0.5);
+            ctx.beginPath(); ctx.ellipse(2 * s, 2 * s, 2.5 * s, 5 * s, 0, 0, Math.PI * 2);
+            ctx.fill(); ctx.restore();
 
             // Head tucked
             ctx.fillStyle = '#1a1a2e';
@@ -977,6 +1050,8 @@ export default function ParticleBackground() {
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            drawGalaxies();
+
             // Particles
             const mouseRadius = 150;
             const pushForce = 3;
@@ -1010,7 +1085,7 @@ export default function ParticleBackground() {
 
             // Shooting stars
             shootingStarTimer++;
-            if (shootingStarTimer > 180 + Math.random() * 300) { // every ~3-8 seconds
+            if (shootingStarTimer > 1200 + Math.random() * 1200) { // Thỉnh thoảng mới bay 1 cái (20 - 40 seconds)
                 shootingStarTimer = 0;
                 shootingStars.push(createShootingStar());
             }
@@ -1079,12 +1154,12 @@ export default function ParticleBackground() {
         <canvas
             ref={canvasRef}
             style={{
-                position: 'absolute',
+                position: 'fixed',
                 inset: 0,
                 width: '100%',
                 height: '100%',
                 pointerEvents: 'none',
-                zIndex: 1,
+                zIndex: 0,
             }}
         />
     );

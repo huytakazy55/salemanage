@@ -37,17 +37,17 @@
 
 /* ─── Dark mode ─── */
 [data-theme="dark"] {
-  --bg: #0f0f17;
-  --bg-card: #1a1a2e;
-  --sidebar-bg: #13131f;
-  --sidebar-hover: rgba(99, 102, 241, 0.18);
+  --bg: #02020a;
+  --bg-card: rgba(26, 26, 46, 0.55);
+  --sidebar-bg: rgba(19, 19, 31, 0.55);
+  --sidebar-hover: rgba(99, 102, 241, 0.25);
 
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
-  --border: #2d2d45;
-  --border-light: #232338;
+  --border: rgba(45, 45, 69, 0.6);
+  --border-light: rgba(35, 35, 56, 0.6);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3);
   --shadow: 0 4px 16px rgba(0, 0, 0, .4);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, .5);
@@ -56,7 +56,17 @@
 }
 
 [data-theme="dark"] thead tr {
-  background: #15152a;
+  background: rgba(21, 21, 42, 0.5);
+}
+
+/* Glassmorphism to see background stars */
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .card,
+[data-theme="dark"] .topbar,
+[data-theme="dark"] .notif-dropdown,
+[data-theme="dark"] .mobile-bottom-nav {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 [data-theme="dark"] tr:hover td {
