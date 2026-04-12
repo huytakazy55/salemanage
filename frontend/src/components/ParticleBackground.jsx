@@ -428,9 +428,64 @@ export default function ParticleBackground() {
         // ==================== SURFACES ====================
         let cachedSurfaces = [];
         let lastSurfaceUpdate = 0;
+        let lastSurfaceFingerprint = '';
+        let domChanged = false;
+
+        // Generate a fingerprint string from current DOM surfaces to detect page changes
+        function computeSurfaceFingerprint() {
+            const elements = document.querySelectorAll('.card, .topbar, [data-login-card], .stat-card');
+            let fp = elements.length + ':';
+            for (let i = 0; i < elements.length; i++) {
+                const rect = elements[i].getBoundingClientRect();
+                // Round to avoid sub-pixel jitter causing false positives
+                fp += `${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)};`;
+            }
+            return fp;
+        }
+
+        // Force all landed/walking/idle penguins back to falling state
+        function resetPenguinsToFalling() {
+            for (const pg of penguins) {
+                const landedStates = ['walking', 'idle', 'landing', 'rolling', 'belly-slide', 'waiting-hole', 'turning-back'];
+                if (landedStates.includes(pg.state)) {
+                    pg.state = 'falling';
+                    pg.y = pg.landedY - 12 * pg.scale; // Start falling from where they were standing
+                    pg.rollAngle = 0;
+                    pg.holeScale = 1;
+                    // Cancel any active hole for this penguin
+                    if (pg.holeRef) {
+                        pg.holeRef.state = 'closing';
+                        pg.holeRef = null;
+                    }
+                }
+            }
+        }
+
+        // Watch for DOM mutations (route changes, content updates)
+        const observer = new MutationObserver(() => {
+            domChanged = true;
+        });
+        // Observe the main app container for child/subtree changes
+        const appRoot = document.getElementById('root') || document.body;
+        observer.observe(appRoot, { childList: true, subtree: true });
 
         function getSurfaces() {
             const now = Date.now();
+
+            // Check for DOM changes — if the DOM mutated, recompute surfaces immediately
+            if (domChanged) {
+                domChanged = false;
+                // Small delay to let the new DOM settle (rAF already provides this)
+                const newFingerprint = computeSurfaceFingerprint();
+                if (newFingerprint !== lastSurfaceFingerprint) {
+                    lastSurfaceFingerprint = newFingerprint;
+                    // Surfaces changed! Force penguins to re-fall
+                    resetPenguinsToFalling();
+                    // Rebuild surfaces immediately
+                    lastSurfaceUpdate = 0;
+                }
+            }
+
             if (now - lastSurfaceUpdate < 500) return cachedSurfaces;
 
             const surfaces = [
@@ -447,6 +502,8 @@ export default function ParticleBackground() {
 
             cachedSurfaces = surfaces;
             lastSurfaceUpdate = now;
+            // Update fingerprint on regular refresh too
+            lastSurfaceFingerprint = computeSurfaceFingerprint();
             return surfaces;
         }
 
@@ -1142,6 +1199,7 @@ export default function ParticleBackground() {
         window.addEventListener('resize', handleResize);
         return () => {
             cancelAnimationFrame(animId);
+            observer.disconnect();
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseleave', handleMouseLeave);
             window.removeEventListener('touchmove', handleTouchMove);
